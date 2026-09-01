@@ -93,8 +93,11 @@ const privateProject = data.privacy === 'private';
     <section class="artifacts-section" id="artifacts" data-media-section data-project-slug={data.slug}>
       <div class="section-kicker"><span>02</span> Supporting artifacts</div>
       <div class="section-heading section-heading--detail">
-        <div><h2>Evidence from the work</h2><p>Images, documents, and recordings stored alongside this project. Drop files onto the carousel to add them, drag the tiles to reorder.</p></div>
-        <button type="button" class="media-add-button" data-media-browse>＋ Add media</button>
+        <div>
+          <h2>Evidence from the work</h2>
+          <p>Images, documents, and recordings stored alongside this project. Drop files onto the carousel to add them, drag the tiles to reorder.</p>
+          <button type="button" class="media-add-button" data-media-browse>＋ Add media</button>
+        </div>
       </div>
       <input type="file" multiple accept=".png,.jpg,.jpeg,.pdf,.mp4" hidden data-media-input />
       <p class="form-status media-status" data-media-status aria-live="assertive"></p>

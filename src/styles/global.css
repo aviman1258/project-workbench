@@ -1564,8 +1564,8 @@ a {
 /* --- direct media management on the carousel --- */
 
 .media-add-button {
-  flex-shrink: 0;
-  align-self: flex-start;
+  display: inline-block;
+  margin-top: 16px;
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   background: var(--surface-strong);
