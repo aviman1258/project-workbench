@@ -1561,6 +1561,28 @@ a {
   pointer-events: none;
 }
 
+.remote-editor-hint {
+  margin: 0 0 14px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.remote-editor-hint a {
+  color: var(--forest);
+}
+
+.remote-forget-button {
+  height: 43px;
+  padding-inline: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--red);
+  cursor: pointer;
+  font-size: 12px;
+}
+
 .media-add-button {
   display: inline-block;
   margin-top: 16px;

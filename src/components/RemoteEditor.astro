@@ -1,0 +1,246 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { projectStatuses } from '../lib/project-schema';
+import { formatLabel } from '../lib/projects';
+
+// Hosted-site editor: commits changes straight to the GitHub repo. The push
+// triggers the Pages workflow, so saves appear on the site about a minute later.
+interface Props {
+  project: CollectionEntry<'projects'>;
+  folder: string;
+}
+
+const { project, folder } = Astro.props;
+const { data } = project;
+---
+
+<section class="project-editor" aria-labelledby="remote-editor-title">
+  <div class="project-editor__intro">
+    <div><p class="eyebrow">On-the-go editor</p><h2 id="remote-editor-title">Edit this project</h2></div>
+    <p>Changes are committed to the GitHub repository; the site rebuilds itself in about a minute.</p>
+  </div>
+
+  <div class="project-editor__tools" data-remote-editor data-project-folder={folder}>
+    <details class="remote-token-panel" data-remote-token-panel>
+      <summary><span aria-hidden="true">◆</span><span data-remote-token-label>Connect GitHub to edit</span></summary>
+      <div class="compact-form">
+        <p class="remote-editor-hint">
+          Paste a fine-grained personal access token with <strong>Contents: read and write</strong> on
+          <code>aviman1258/project-workbench</code>. It is stored only in this browser.
+          <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">Create one on GitHub ↗</a>
+        </p>
+        <label class="field"><span>Access token</span><input type="password" data-remote-token-input autocomplete="off" placeholder="github_pat_…" /></label>
+        <div class="compact-form__actions">
+          <p class="form-status" data-remote-token-status aria-live="assertive"></p>
+          <button class="primary-button" type="button" data-remote-token-save>Connect</button>
+          <button class="remote-forget-button" type="button" data-remote-token-forget hidden>Forget token</button>
+        </div>
+      </div>
+    </details>
+
+    <details data-remote-edit-panel hidden>
+      <summary><span aria-hidden="true">✦</span><span>Edit project details</span></summary>
+      <form class="compact-form" data-remote-edit-form novalidate>
+        <label class="field"><span>Name</span><input name="name" value={data.name} required maxlength="120" /></label>
+        <label class="field"><span>Description</span><textarea name="description" required maxlength="500" rows="3">{data.description}</textarea></label>
+        <label class="field"><span>Why it was built</span><textarea name="why" required maxlength="3000" rows="8">{data.why}</textarea></label>
+        <div class="form-grid form-grid--two">
+          <label class="field"><span>Status</span><select name="status" required>{projectStatuses.map((value) => <option value={value} selected={value === data.status}>{formatLabel(value)}</option>)}</select></label>
+          <label class="field"><span>Start date</span><input name="startDate" type="date" value={data.startDate.toISOString().slice(0, 10)} required /></label>
+        </div>
+        <div class="compact-form__actions">
+          <p class="form-status" data-remote-edit-status aria-live="assertive"></p>
+          <button class="primary-button" type="submit">Commit changes</button>
+        </div>
+      </form>
+    </details>
+
+    <details data-remote-media-panel hidden>
+      <summary><span aria-hidden="true">＋</span><span>Add media</span></summary>
+      <div class="compact-form">
+        <p class="remote-editor-hint">Photos, PDFs, or MP4s up to 20 MB. The file is committed to the project's artifacts folder.</p>
+        <label class="field"><span>File</span><input type="file" accept=".png,.jpg,.jpeg,.pdf,.mp4" data-remote-media-input /></label>
+        <div class="compact-form__actions">
+          <p class="form-status" data-remote-media-status aria-live="assertive"></p>
+          <button class="primary-button" type="button" data-remote-media-upload>Commit media</button>
+        </div>
+      </div>
+    </details>
+  </div>
+</section>
+
+<script>
+  import { parse, stringify } from 'yaml';
+
+  const OWNER = 'aviman1258';
+  const REPO = 'project-workbench';
+  const BRANCH = 'main';
+  const TOKEN_KEY = 'workbench-github-token';
+
+  const root = document.querySelector<HTMLElement>('[data-remote-editor]');
+  if (root) {
+    const folder = root.dataset.projectFolder ?? '';
+    const indexPath = `src/content/projects/${folder}/index.md`;
+
+    const tokenPanel = root.querySelector<HTMLDetailsElement>('[data-remote-token-panel]')!;
+    const tokenLabel = root.querySelector<HTMLElement>('[data-remote-token-label]')!;
+    const tokenInput = root.querySelector<HTMLInputElement>('[data-remote-token-input]')!;
+    const tokenStatus = root.querySelector<HTMLElement>('[data-remote-token-status]')!;
+    const forgetButton = root.querySelector<HTMLButtonElement>('[data-remote-token-forget]')!;
+    const editPanel = root.querySelector<HTMLDetailsElement>('[data-remote-edit-panel]')!;
+    const mediaPanel = root.querySelector<HTMLDetailsElement>('[data-remote-media-panel]')!;
+
+    let token = '';
+    try { token = window.localStorage.getItem(TOKEN_KEY) ?? ''; } catch { /* private mode */ }
+
+    const setConnected = (connected: boolean) => {
+      editPanel.hidden = !connected;
+      mediaPanel.hidden = !connected;
+      forgetButton.hidden = !connected;
+      tokenLabel.textContent = connected ? 'GitHub connected' : 'Connect GitHub to edit';
+      if (connected) tokenPanel.open = false;
+    };
+    setConnected(Boolean(token));
+
+    const gh = async (path: string, init: RequestInit = {}) => {
+      const response = await fetch(`https://api.github.com${path}`, {
+        ...init,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          ...(init.headers ?? {}),
+        },
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = typeof (body as Record<string, unknown>).message === 'string' ? (body as Record<string, string>).message : `GitHub returned ${response.status}.`;
+        const error = new Error(message) as Error & { status?: number };
+        error.status = response.status;
+        throw error;
+      }
+      return body as Record<string, any>;
+    };
+
+    const encodeText = (text: string) => {
+      const bytes = new TextEncoder().encode(text);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      return btoa(binary);
+    };
+    const decodeContent = (base64: string) =>
+      new TextDecoder().decode(Uint8Array.from(atob(base64.replace(/\n/g, '')), (c) => c.charCodeAt(0)));
+
+    const getFile = async (path: string) => {
+      const file = await gh(`/repos/${OWNER}/${REPO}/contents/${path}?ref=${BRANCH}`);
+      return { sha: String(file.sha), text: decodeContent(String(file.content)) };
+    };
+    const putFile = (path: string, contentBase64: string, message: string, sha?: string) =>
+      gh(`/repos/${OWNER}/${REPO}/contents/${path}`, {
+        method: 'PUT',
+        body: JSON.stringify({ message, content: contentBase64, branch: BRANCH, ...(sha ? { sha } : {}) }),
+      });
+
+    const patchFrontmatter = async (patch: Record<string, unknown>, message: string) => {
+      const { sha, text } = await getFile(indexPath);
+      const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
+      if (!match) throw new Error('index.md is missing YAML front matter.');
+      const metadata = { ...(parse(match[1]) as Record<string, unknown>), ...patch, updatedDate: new Date().toISOString().slice(0, 10) };
+      const body = text.slice(match[0].length).replace(/^\r?\n/, '');
+      const next = `---\n${stringify(metadata, { lineWidth: 0 }).trimEnd()}\n---\n${body ? `\n${body}` : ''}`;
+      await putFile(indexPath, encodeText(next), message, sha);
+    };
+
+    // --- connect / forget ---
+    root.querySelector('[data-remote-token-save]')?.addEventListener('click', async () => {
+      const candidate = tokenInput.value.trim();
+      if (!candidate) { tokenStatus.textContent = 'Paste a token first.'; return; }
+      token = candidate;
+      tokenStatus.textContent = 'Checking access…';
+      try {
+        const repo = await gh(`/repos/${OWNER}/${REPO}`);
+        if (!repo.permissions?.push) throw new Error('That token cannot write to the repository.');
+        try { window.localStorage.setItem(TOKEN_KEY, token); } catch { /* ignore */ }
+        tokenInput.value = '';
+        tokenStatus.textContent = 'Connected.';
+        setConnected(true);
+      } catch (error) {
+        token = '';
+        tokenStatus.textContent = (error as Error).message || 'That token did not work.';
+      }
+    });
+    forgetButton.addEventListener('click', () => {
+      token = '';
+      try { window.localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+      tokenStatus.textContent = 'Token forgotten.';
+      setConnected(false);
+    });
+
+    // --- edit fields ---
+    const editForm = root.querySelector<HTMLFormElement>('[data-remote-edit-form]')!;
+    const editStatus = root.querySelector<HTMLElement>('[data-remote-edit-status]')!;
+    editForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(editForm);
+      const fields = {
+        name: String(formData.get('name') ?? '').trim(),
+        description: String(formData.get('description') ?? '').trim(),
+        why: String(formData.get('why') ?? '').trim(),
+        status: String(formData.get('status') ?? ''),
+        startDate: String(formData.get('startDate') ?? ''),
+      };
+      if (!fields.name || !fields.description || !fields.why || !/^\d{4}-\d{2}-\d{2}$/.test(fields.startDate)) {
+        editStatus.textContent = 'Name, description, why, and a valid start date are required.';
+        return;
+      }
+      const submit = editForm.querySelector<HTMLButtonElement>('button[type=submit]')!;
+      submit.disabled = true;
+      editStatus.textContent = 'Committing…';
+      try {
+        await patchFrontmatter(fields, `Update ${fields.name} from the hosted editor`);
+        editStatus.textContent = 'Committed. The site rebuilds in about a minute.';
+      } catch (error) {
+        if ((error as { status?: number }).status === 401) setConnected(false);
+        editStatus.textContent = (error as Error).message || 'The commit failed.';
+      } finally {
+        submit.disabled = false;
+      }
+    });
+
+    // --- add media ---
+    const mediaInput = root.querySelector<HTMLInputElement>('[data-remote-media-input]')!;
+    const mediaStatus = root.querySelector<HTMLElement>('[data-remote-media-status]')!;
+    root.querySelector('[data-remote-media-upload]')?.addEventListener('click', async () => {
+      const file = mediaInput.files?.[0];
+      if (!file) { mediaStatus.textContent = 'Choose a file first.'; return; }
+      if (!/\.(png|jpe?g|pdf|mp4)$/i.test(file.name)) { mediaStatus.textContent = 'PNG, JPG, PDF, or MP4 only.'; return; }
+      if (file.size > 20 * 1024 * 1024) { mediaStatus.textContent = 'Keep files under 20 MB.'; return; }
+
+      const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+      const stem = file.name.slice(0, file.name.lastIndexOf('.')).replace(/[^a-zA-Z0-9._-]+/g, '-') || 'media';
+      const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+      const filename = `${stem}-${stamp}${extension}`;
+
+      mediaStatus.textContent = `Uploading ${filename}…`;
+      try {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.addEventListener('load', () => resolve(String(reader.result)));
+          reader.addEventListener('error', () => reject(new Error('The file could not be read.')));
+          reader.readAsDataURL(file);
+        });
+        await putFile(
+          `src/content/projects/${folder}/artifacts/${filename}`,
+          dataUrl.slice(dataUrl.indexOf(',') + 1),
+          `Add ${filename} from the hosted editor`,
+        );
+        await patchFrontmatter({}, `Touch updated date for ${filename}`);
+        mediaInput.value = '';
+        mediaStatus.textContent = 'Committed. The site rebuilds in about a minute.';
+      } catch (error) {
+        if ((error as { status?: number }).status === 401) setConnected(false);
+        mediaStatus.textContent = (error as Error).message || 'The upload failed.';
+      }
+    });
+  }
+</script>

@@ -2,7 +2,8 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
 import StatusBadge from '../../components/StatusBadge.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { formatDate, formatLabel, listedProjects, loadArtifacts, withBase } from '../../lib/projects';
+import { formatDate, formatLabel, getProjectFolder, listedProjects, loadArtifacts, publicOnlyBuild, withBase } from '../../lib/projects';
+import RemoteEditor from '../../components/RemoteEditor.astro';
 import { privacyLevels, projectStatuses } from '../../lib/project-schema';
 
 export async function getStaticPaths() {
@@ -18,6 +19,7 @@ const { project } = Astro.props;
 const { data } = project;
 const artifacts = await loadArtifacts(project);
 const privateProject = data.privacy === 'private';
+const projectFolder = await getProjectFolder(project);
 ---
 
 <BaseLayout title={data.name} description={data.description}>
@@ -44,6 +46,9 @@ const privateProject = data.privacy === 'private';
 
     <nav class="section-nav" aria-label="Project sections"><a href="#overview">Overview</a><a href="#artifacts">Artifacts <span>{artifacts.length}</span></a></nav>
 
+    {publicOnlyBuild && <RemoteEditor project={project} folder={projectFolder} />}
+
+    {!publicOnlyBuild && (
     <section class="project-editor" aria-labelledby="project-editor-title">
       <div class="project-editor__intro">
         <div><p class="eyebrow">Local editor</p><h2 id="project-editor-title">Manage this project</h2></div>
@@ -83,6 +88,7 @@ const privateProject = data.privacy === 'private';
 
       </div>
     </section>
+    )}
 
     <article class="case-study" id="overview">
       <div class="section-kicker"><span>01</span> Overview</div>
@@ -90,19 +96,23 @@ const privateProject = data.privacy === 'private';
       <div class="prose"><p>{data.why}</p></div>
     </article>
 
-    <section class="artifacts-section" id="artifacts" data-media-section data-project-slug={data.slug}>
+    <section class="artifacts-section" id="artifacts" {...(publicOnlyBuild ? {} : { 'data-media-section': true, 'data-project-slug': data.slug })}>
       <div class="section-kicker"><span>02</span> Supporting artifacts</div>
       <div class="section-heading section-heading--detail">
         <div>
           <h2>Evidence from the work</h2>
-          <p>Images, documents, and recordings stored alongside this project. Drop files onto the carousel to add them, drag the tiles to reorder.</p>
-          <button type="button" class="media-add-button" data-media-browse>＋ Add media</button>
+          <p>
+            {publicOnlyBuild
+              ? 'Images, documents, and recordings stored alongside this project.'
+              : 'Images, documents, and recordings stored alongside this project. Drop files onto the carousel to add them, drag the tiles to reorder.'}
+          </p>
+          {!publicOnlyBuild && <button type="button" class="media-add-button" data-media-browse>＋ Add media</button>}
         </div>
       </div>
-      <input type="file" multiple accept=".png,.jpg,.jpeg,.pdf,.mp4" hidden data-media-input />
+      {!publicOnlyBuild && <input type="file" multiple accept=".png,.jpg,.jpeg,.pdf,.mp4" hidden data-media-input />}
       <p class="form-status media-status" data-media-status aria-live="assertive"></p>
       {artifacts.length > 0 ? (
-        <div class="artifact-carousel" data-artifact-carousel data-media-dropzone tabindex={artifacts.length > 1 ? '0' : undefined} aria-label="Project artifacts carousel">
+        <div class="artifact-carousel" data-artifact-carousel {...(publicOnlyBuild ? {} : { 'data-media-dropzone': true })} tabindex={artifacts.length > 1 ? '0' : undefined} aria-label="Project artifacts carousel">
           <div class="artifact-carousel__viewport" data-carousel-viewport>
             <div class="artifact-carousel__track" data-carousel-track>
               {artifacts.map((artifact, index) => (
@@ -143,18 +153,24 @@ const privateProject = data.privacy === 'private';
 
           <div class="artifact-carousel__thumbnails" data-media-tiles aria-label="Choose an artifact, or drag a tile to reorder">
             {artifacts.map((artifact, index) => (
-              <button type="button" data-carousel-thumbnail data-media-tile data-filename={artifact.filename} data-active={index === 0 ? 'true' : 'false'} aria-label={`Show ${artifact.filename}`} aria-current={index === 0 ? 'true' : undefined}>
+              <button type="button" data-carousel-thumbnail {...(publicOnlyBuild ? {} : { 'data-media-tile': true })} data-filename={artifact.filename} data-active={index === 0 ? 'true' : 'false'} aria-label={`Show ${artifact.filename}`} aria-current={index === 0 ? 'true' : undefined}>
                 {artifact.kind === 'image' ? <img src={artifact.href} alt="" loading="lazy" draggable="false" /> : <span data-pdf-preview={artifact.kind === 'pdf' ? artifact.href : undefined}>{artifact.kind.toUpperCase()}</span>}
               </button>
             ))}
           </div>
 
+          {!publicOnlyBuild && (
           <div class="media-trash-row">
             <span class="media-trash" data-media-trash aria-label="Drag a media tile here to delete it">
               <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
               <small>Drag a tile here to delete</small>
             </span>
           </div>
+          )}
+        </div>
+      ) : publicOnlyBuild ? (
+        <div class="artifact-empty">
+          <span aria-hidden="true">□</span><div><h3>No artifacts attached yet</h3><p>Media for this project is added from the local workbench.</p></div>
         </div>
       ) : (
         <button type="button" class="artifact-empty artifact-empty--dropzone" data-media-dropzone data-media-browse>
@@ -162,6 +178,7 @@ const privateProject = data.privacy === 'private';
         </button>
       )}
 
+      {!publicOnlyBuild && (
       <dialog class="media-delete-dialog" data-media-delete-dialog>
         <h3>Delete this media?</h3>
         <p><strong data-media-delete-name></strong> will be removed from the project folder. This cannot be undone.</p>
@@ -170,6 +187,7 @@ const privateProject = data.privacy === 'private';
           <button type="button" class="media-delete-dialog__confirm" data-media-delete-confirm>Delete</button>
         </div>
       </dialog>
+      )}
     </section>
   </div>
 </BaseLayout>

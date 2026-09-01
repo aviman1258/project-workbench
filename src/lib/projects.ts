@@ -36,7 +36,7 @@ const artifactTypes: Record<string, Pick<ProjectArtifact, 'kind' | 'mimeType'>> 
   '.mp4': { kind: 'video', mimeType: 'video/mp4' },
 };
 
-async function getProjectFolder(project: CollectionEntry<'projects'>): Promise<string> {
+export async function getProjectFolder(project: CollectionEntry<'projects'>): Promise<string> {
   const entries = await readdir(projectsRoot, { withFileTypes: true });
   const folder = entries.find(
     (entry) =>
