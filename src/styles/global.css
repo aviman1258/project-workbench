@@ -2378,6 +2378,99 @@ a {
   margin-top: 0;
 }
 
+.artifact-manager__hint {
+  margin: 0 0 14px;
+  color: var(--ink-faint);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.artifact-manager__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.artifact-manager__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-strong);
+  cursor: grab;
+}
+
+.artifact-manager__item--dragging {
+  opacity: 0.55;
+  border-style: dashed;
+  cursor: grabbing;
+}
+
+.artifact-manager__grip {
+  color: var(--ink-faint);
+  font-size: 15px;
+  letter-spacing: -1px;
+  user-select: none;
+}
+
+.artifact-manager__thumb {
+  width: 52px;
+  height: 38px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--moss);
+  flex-shrink: 0;
+}
+
+.artifact-manager__thumb--label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--forest);
+  font: 600 10px/1 var(--mono);
+}
+
+.artifact-manager__name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+
+.artifact-manager__buttons {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.artifact-manager__buttons button {
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 12.5px/1 var(--sans);
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.artifact-manager__buttons button:hover {
+  background: var(--moss);
+}
+
+.artifact-manager__delete {
+  color: var(--red) !important;
+}
+
+.artifact-manager__delete:hover {
+  background: var(--red-light) !important;
+}
+
 .compact-form__actions {
   margin-top: 16px;
   justify-content: space-between;

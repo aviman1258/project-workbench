@@ -13,6 +13,7 @@ export const projectMetadataSchema = z.object({
   privacy: z.enum(privacyLevels),
   startDate: z.coerce.date(),
   updatedDate: z.coerce.date(),
+  artifactOrder: z.array(z.string().min(1)).optional(),
 });
 
 const dateInput = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');

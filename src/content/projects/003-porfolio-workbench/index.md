@@ -8,6 +8,10 @@ status: dev
 privacy: public
 startDate: 2026-08-29
 updatedDate: 2026-09-01
+artifactOrder:
+  - portfolio-workbench-project-index.png
+  - portfolio-workbench-project-editor.png
+  - portfolio-workbench-add-project.png
 ---
 
 ## What I Built

@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Plugin } from 'vite';
 import { parse, stringify } from 'yaml';
@@ -115,13 +115,14 @@ function parseFrontmatter(source: string): Record<string, unknown> {
   return parse(match[1]) as Record<string, unknown>;
 }
 
-async function touchProjectUpdated(projectRoot: string) {
+async function touchProjectUpdated(projectRoot: string, patch: Record<string, unknown> = {}) {
   const indexPath = path.join(projectRoot, 'index.md');
   const source = await readFile(indexPath, 'utf8');
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(source);
   if (!match) throw new EditorError('Project index.md is missing YAML front matter.', 500);
   const metadata = {
     ...(parse(match[1]) as Record<string, unknown>),
+    ...patch,
     updatedDate: new Date().toISOString().slice(0, 10),
   };
   projectMetadataSchema.parse(metadata);
@@ -235,6 +236,7 @@ async function updateProject(projectsRoot: string, slug: string, rawInput: unkno
     privacy: update.privacy,
     startDate: update.startDate,
     updatedDate: new Date().toISOString().slice(0, 10),
+    ...(existing.artifactOrder !== undefined ? { artifactOrder: existing.artifactOrder } : {}),
   };
 
   projectMetadataSchema.parse(metadata);
@@ -281,6 +283,57 @@ async function addArtifact(projectsRoot: string, slug: string, rawInput: unknown
   await writeFile(path.join(artifactsRoot, finalName), contents, { flag: 'wx' });
   await touchProjectUpdated(projectRoot);
   return { filename: finalName };
+}
+
+async function listArtifactFiles(projectRoot: string): Promise<Set<string>> {
+  try {
+    return new Set(await readdir(path.join(projectRoot, 'artifacts')));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return new Set();
+    throw error;
+  }
+}
+
+function artifactNameOrThrow(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) throw new EditorError('Artifact filename is required.', 400, 'artifact');
+  const name = value.trim();
+  if (path.basename(name) !== name || name.includes('\\')) throw new EditorError('Invalid artifact filename.', 400, 'artifact');
+  return name;
+}
+
+async function reorderArtifacts(projectsRoot: string, slug: string, rawInput: unknown) {
+  if (!rawInput || typeof rawInput !== 'object' || !Array.isArray((rawInput as Record<string, unknown>).order)) {
+    throw new EditorError('An ordered list of artifact filenames is required.', 400, 'artifact');
+  }
+
+  const projectRoot = await findProjectFolder(projectsRoot, slug);
+  const existing = await listArtifactFiles(projectRoot);
+  const order: string[] = [];
+  for (const entry of (rawInput as { order: unknown[] }).order) {
+    const name = artifactNameOrThrow(entry);
+    if (!existing.has(name)) throw new EditorError(`No artifact named "${name}" exists.`, 404, 'artifact');
+    if (!order.includes(name)) order.push(name);
+  }
+
+  await touchProjectUpdated(projectRoot, { artifactOrder: order });
+  return { order };
+}
+
+async function deleteArtifact(projectsRoot: string, slug: string, rawInput: unknown) {
+  if (!rawInput || typeof rawInput !== 'object') throw new EditorError('Artifact details are invalid.', 400, 'artifact');
+  const filename = artifactNameOrThrow((rawInput as Record<string, unknown>).filename);
+
+  const projectRoot = await findProjectFolder(projectsRoot, slug);
+  const existing = await listArtifactFiles(projectRoot);
+  if (!existing.has(filename)) throw new EditorError(`No artifact named "${filename}" exists.`, 404, 'artifact');
+
+  await rm(path.join(projectRoot, 'artifacts', filename));
+
+  const metadata = parseFrontmatter(await readFile(path.join(projectRoot, 'index.md'), 'utf8'));
+  const currentOrder = Array.isArray(metadata.artifactOrder) ? (metadata.artifactOrder as string[]) : undefined;
+  const patch = currentOrder ? { artifactOrder: currentOrder.filter((name) => name !== filename) } : {};
+  await touchProjectUpdated(projectRoot, patch);
+  return { deleted: filename };
 }
 
 export function localEditorPlugin(projectsRoot = defaultProjectsRoot): Plugin {
@@ -421,6 +474,22 @@ export function localEditorPlugin(projectsRoot = defaultProjectsRoot): Plugin {
             const slug = decodeURIComponent(uploadMatch[1]);
             if (await isPrivateProject(projectsRoot, slug)) requireDeviceUnlock(request);
             sendJson(response, 201, await addArtifact(projectsRoot, slug, body));
+            return;
+          }
+
+          const orderMatch = /^\/api\/local\/projects\/([^/]+)\/artifacts\/order$/.exec(pathname);
+          if (orderMatch) {
+            const slug = decodeURIComponent(orderMatch[1]);
+            if (await isPrivateProject(projectsRoot, slug)) requireDeviceUnlock(request);
+            sendJson(response, 200, await reorderArtifacts(projectsRoot, slug, body));
+            return;
+          }
+
+          const removeMatch = /^\/api\/local\/projects\/([^/]+)\/artifacts\/delete$/.exec(pathname);
+          if (removeMatch) {
+            const slug = decodeURIComponent(removeMatch[1]);
+            if (await isPrivateProject(projectsRoot, slug)) requireDeviceUnlock(request);
+            sendJson(response, 200, await deleteArtifact(projectsRoot, slug, body));
             return;
           }
 
