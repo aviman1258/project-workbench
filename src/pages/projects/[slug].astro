@@ -140,7 +140,7 @@ const privateProject = data.privacy === 'private';
 
           <div class="artifact-carousel__thumbnails" data-media-tiles aria-label="Choose an artifact, or drag a tile to reorder">
             {artifacts.map((artifact, index) => (
-              <button type="button" draggable="true" data-carousel-thumbnail data-media-tile data-filename={artifact.filename} data-active={index === 0 ? 'true' : 'false'} aria-label={`Show ${artifact.filename}`} aria-current={index === 0 ? 'true' : undefined}>
+              <button type="button" data-carousel-thumbnail data-media-tile data-filename={artifact.filename} data-active={index === 0 ? 'true' : 'false'} aria-label={`Show ${artifact.filename}`} aria-current={index === 0 ? 'true' : undefined}>
                 {artifact.kind === 'image' ? <img src={artifact.href} alt="" loading="lazy" draggable="false" /> : <span>{artifact.kind.toUpperCase()}</span>}
               </button>
             ))}
@@ -477,7 +477,9 @@ const privateProject = data.privacy === 'private';
           await postJson(`/api/local/projects/${mediaSlug}/artifacts`, { filename: file.name, data: dataUrl.slice(dataUrl.indexOf(',') + 1) });
         }
         setMediaStatus(rejected.length ? `Added ${accepted.length}, skipped ${rejected.length} unsupported file(s). Refreshing…` : 'Added. Refreshing the artifacts…');
-        window.setTimeout(() => window.location.reload(), 400);
+        // index.md changed, so astro dev reloads the page itself once content re-syncs;
+        // this slower manual reload is only a fallback (racing it renders stale data)
+        window.setTimeout(() => window.location.reload(), 2000);
       } catch (error) {
         uploading = false;
         mediaFailure(error, 'The media could not be added.');
@@ -508,72 +510,124 @@ const privateProject = data.privacy === 'private';
       });
     });
 
-    // --- reordering: drag the tiles under the carousel; order saves on drop ---
+    // --- reordering & deleting: pointer-based tile drag (works for mouse AND touch;
+    // HTML5 drag events never fire on touch input). Mouse lifts a tile after a few
+    // pixels of movement; touch lifts after a short hold so taps still select slides.
     let draggedTile: HTMLElement | null = null;
     let tileSnapshot: HTMLElement[] = [];
-    let droppedOnTrash = false;
+    let pendingDelete = '';
+    let dragJustEnded = false;
+    let pendingDrag: { tile: HTMLElement; x: number; y: number; timer: number } | null = null;
 
     const tileOrder = () =>
       [...(tilesRow?.querySelectorAll<HTMLElement>('[data-media-tile]') ?? [])].map((tile) => tile.dataset.filename ?? '');
     const restoreTileOrder = () => tileSnapshot.forEach((tile) => tilesRow?.appendChild(tile));
 
-    tilesRow?.addEventListener('dragstart', (event) => {
-      const tile = (event.target as HTMLElement).closest<HTMLElement>('[data-media-tile]');
-      if (!tile) return;
-      draggedTile = tile;
-      droppedOnTrash = false;
-      tileSnapshot = [...tilesRow.querySelectorAll<HTMLElement>('[data-media-tile]')];
-      tile.classList.add('media-tile--dragging');
-      trash?.classList.add('media-trash--armed');
-      event.dataTransfer?.setData('text/plain', tile.dataset.filename ?? '');
-      if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
-    });
-    tilesRow?.addEventListener('dragover', (event) => {
-      if (!draggedTile) return;
+    // NOTE: no setPointerCapture here — moving the dragged tile with insertBefore
+    // removes+reinserts it, which silently releases pointer capture. Window-level
+    // listeners during the drag keep working no matter where the pointer goes.
+    const onDragMove = (event: PointerEvent) => {
+      if (!draggedTile || !tilesRow) return;
       event.preventDefault();
-      const over = (event.target as HTMLElement).closest<HTMLElement>('[data-media-tile]');
+      const under = document.elementFromPoint(event.clientX, event.clientY);
+      const overTrash = Boolean(under?.closest('[data-media-trash]'));
+      trash?.classList.toggle('media-trash--target', overTrash);
+      if (overTrash) return;
+      const over = under?.closest<HTMLElement>('[data-media-tile]');
       if (!over || over === draggedTile) return;
       const rect = over.getBoundingClientRect();
       tilesRow.insertBefore(draggedTile, event.clientX < rect.left + rect.width / 2 ? over : over.nextSibling);
+    };
+    const onDragUp = (event: PointerEvent) => void endTileDrag(event, false);
+    const onDragCancel = (event: PointerEvent) => void endTileDrag(event, true);
+
+    const beginTileDrag = (tile: HTMLElement) => {
+      draggedTile = tile;
+      tileSnapshot = [...(tilesRow?.querySelectorAll<HTMLElement>('[data-media-tile]') ?? [])];
+      tile.classList.add('media-tile--dragging');
+      trash?.classList.add('media-trash--armed');
+      window.addEventListener('pointermove', onDragMove);
+      window.addEventListener('pointerup', onDragUp);
+      window.addEventListener('pointercancel', onDragCancel);
+    };
+
+    tilesRow?.addEventListener('pointerdown', (event) => {
+      if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
+      const tile = (event.target as HTMLElement).closest<HTMLElement>('[data-media-tile]');
+      if (!tile) return;
+      pendingDrag = {
+        tile,
+        x: event.clientX,
+        y: event.clientY,
+        // touch: hold ~300ms to lift; mouse: 0 means "lift on movement instead"
+        timer: event.pointerType === 'mouse'
+          ? 0
+          : window.setTimeout(() => { if (pendingDrag?.tile === tile) beginTileDrag(tile); }, 300),
+      };
     });
-    tilesRow?.addEventListener('drop', (event) => {
-      if (draggedTile) event.preventDefault();
+
+    tilesRow?.addEventListener('pointermove', (event) => {
+      if (!pendingDrag || draggedTile) return;
+      const moved = Math.hypot(event.clientX - pendingDrag.x, event.clientY - pendingDrag.y);
+      if (pendingDrag.timer) {
+        // touch that moves before the hold completes is a tap/scroll, not a drag
+        if (moved > 10) { clearTimeout(pendingDrag.timer); pendingDrag = null; }
+        return;
+      }
+      if (moved > 6) {
+        beginTileDrag(pendingDrag.tile);
+        onDragMove(event);
+      }
     });
-    tilesRow?.addEventListener('dragend', async () => {
-      draggedTile?.classList.remove('media-tile--dragging');
-      trash?.classList.remove('media-trash--armed', 'media-trash--target');
-      const finished = draggedTile;
+    tilesRow?.addEventListener('pointerup', () => {
+      if (pendingDrag?.timer) clearTimeout(pendingDrag.timer);
+      if (!draggedTile) pendingDrag = null;
+    });
+
+    const endTileDrag = async (event: PointerEvent, cancelled: boolean) => {
+      window.removeEventListener('pointermove', onDragMove);
+      window.removeEventListener('pointerup', onDragUp);
+      window.removeEventListener('pointercancel', onDragCancel);
+      if (pendingDrag?.timer) clearTimeout(pendingDrag.timer);
+      pendingDrag = null;
+      if (!draggedTile) return;
+      const tile = draggedTile;
       draggedTile = null;
-      if (!finished || droppedOnTrash) return;
+      dragJustEnded = true;
+      window.setTimeout(() => { dragJustEnded = false; }, 0);
+      tile.classList.remove('media-tile--dragging');
+      trash?.classList.remove('media-trash--armed', 'media-trash--target');
+
+      if (cancelled) { restoreTileOrder(); return; }
+
+      const under = document.elementFromPoint(event.clientX, event.clientY);
+      if (under?.closest('[data-media-trash]')) {
+        restoreTileOrder();
+        pendingDelete = tile.dataset.filename ?? '';
+        if (deleteName) deleteName.textContent = pendingDelete;
+        deleteDialog?.showModal();
+        return;
+      }
+
       const order = tileOrder();
-      if (JSON.stringify(order) === JSON.stringify(tileSnapshot.map((tile) => tile.dataset.filename ?? ''))) return;
+      if (JSON.stringify(order) === JSON.stringify(tileSnapshot.map((snap) => snap.dataset.filename ?? ''))) return;
       setMediaStatus('Saving the new order…');
       try {
         await postJson(`/api/local/projects/${mediaSlug}/artifacts/order`, { order });
         setMediaStatus('Order saved. Refreshing…');
-        window.setTimeout(() => window.location.reload(), 400);
+        window.setTimeout(() => window.location.reload(), 2000);
       } catch (error) {
         restoreTileOrder();
         mediaFailure(error, 'The order could not be saved.');
       }
-    });
-
-    // --- deleting: drag a tile onto the trash, confirm in a modal ---
-    let pendingDelete = '';
-    trash?.addEventListener('dragover', (event) => {
-      if (!draggedTile) return;
-      event.preventDefault();
-      trash.classList.add('media-trash--target');
-    });
-    trash?.addEventListener('dragleave', () => trash.classList.remove('media-trash--target'));
-    trash?.addEventListener('drop', (event) => {
-      if (!draggedTile) return;
-      event.preventDefault();
-      droppedOnTrash = true;
-      restoreTileOrder();
-      pendingDelete = draggedTile.dataset.filename ?? '';
-      if (deleteName) deleteName.textContent = pendingDelete;
-      deleteDialog?.showModal();
+    };
+    // a completed drag must not also fire the thumbnail's slide-select click,
+    // and a touch hold must not open the context menu mid-drag
+    tilesRow?.addEventListener('click', (event) => {
+      if (dragJustEnded) { event.preventDefault(); event.stopPropagation(); }
+    }, true);
+    tilesRow?.addEventListener('contextmenu', (event) => {
+      if (draggedTile || pendingDrag) event.preventDefault();
     });
 
     deleteDialog?.querySelector('[data-media-delete-cancel]')?.addEventListener('click', () => deleteDialog.close());
@@ -585,7 +639,7 @@ const privateProject = data.privacy === 'private';
         await postJson(`/api/local/projects/${mediaSlug}/artifacts/delete`, { filename: pendingDelete });
         deleteDialog.close();
         setMediaStatus('Deleted. Refreshing the artifacts…');
-        window.setTimeout(() => window.location.reload(), 400);
+        window.setTimeout(() => window.location.reload(), 2000);
       } catch (error) {
         deleteDialog.close();
         mediaFailure(error, 'The media could not be deleted.');

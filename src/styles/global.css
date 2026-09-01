@@ -1600,6 +1600,14 @@ a {
 
 [data-media-tile] {
   cursor: grab;
+  /* pointer-based drag needs the browser to keep its hands off touch gestures */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+[data-media-tile] img {
+  pointer-events: none;
 }
 
 .media-tile--dragging {
