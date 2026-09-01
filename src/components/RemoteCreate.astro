@@ -1,0 +1,115 @@
+---
+import { projectStatuses } from '../lib/project-schema';
+import { formatLabel, withBase } from '../lib/projects';
+import GitHubConnect from './GitHubConnect.astro';
+
+// Hosted-site "Add project": creates the project folder in the GitHub repo.
+// Hosted creations are always public — private projects are made in the local workbench.
+const today = new Date().toISOString().slice(0, 10);
+---
+
+<section class="project-editor" aria-labelledby="remote-create-title">
+  <div class="project-editor__intro">
+    <div><p class="eyebrow">On-the-go editor</p><h2 id="remote-create-title">Add a project</h2></div>
+    <p>The project is committed to the GitHub repository; the site rebuilds itself in about a minute. Hosted projects are always public — private ones are created in the local workbench.</p>
+  </div>
+
+  <div class="project-editor__tools" data-remote-create data-projects-base={withBase('/projects')}>
+    <GitHubConnect />
+
+    <details data-remote-create-panel hidden open>
+      <summary><span aria-hidden="true">＋</span><span>New project</span></summary>
+      <form class="compact-form" data-remote-create-form novalidate>
+        <label class="field"><span>Name</span><input name="name" required maxlength="120" placeholder="A useful name for the project" /></label>
+        <label class="field"><span>Description</span><textarea name="description" required maxlength="500" rows="3" placeholder="What does it do?"></textarea></label>
+        <label class="field"><span>Why it was built</span><textarea name="why" required maxlength="3000" rows="6" placeholder="What problem, curiosity, or need made you build it?"></textarea></label>
+        <div class="form-grid form-grid--two">
+          <label class="field"><span>Status</span><select name="status" required>{projectStatuses.map((value) => <option value={value}>{formatLabel(value)}</option>)}</select></label>
+          <label class="field"><span>Start date</span><input name="startDate" type="date" value={today} required /></label>
+        </div>
+        <div class="compact-form__actions">
+          <p class="form-status" data-remote-create-status aria-live="assertive"></p>
+          <button class="primary-button" type="submit">Create project →</button>
+        </div>
+      </form>
+    </details>
+  </div>
+</section>
+
+<script>
+  import { stringify } from 'yaml';
+  import { encodeText, listProjectFolders, putFile, wireTokenPanel } from '../lib/github-client';
+
+  const root = document.querySelector<HTMLElement>('[data-remote-create]');
+  if (root) {
+    const projectsBase = root.dataset.projectsBase ?? '/projects';
+    const panel = root.querySelector<HTMLDetailsElement>('[data-remote-create-panel]')!;
+
+    let token = '';
+    const connection = wireTokenPanel(root, (next) => {
+      token = next;
+      panel.hidden = !token;
+    });
+
+    const form = root.querySelector<HTMLFormElement>('[data-remote-create-form]')!;
+    const status = root.querySelector<HTMLElement>('[data-remote-create-status]')!;
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(form);
+      const fields = {
+        name: String(formData.get('name') ?? '').trim(),
+        description: String(formData.get('description') ?? '').trim(),
+        why: String(formData.get('why') ?? '').trim(),
+        status: String(formData.get('status') ?? ''),
+        startDate: String(formData.get('startDate') ?? ''),
+      };
+      if (!fields.name || !fields.description || !fields.why || !/^\d{4}-\d{2}-\d{2}$/.test(fields.startDate)) {
+        status.textContent = 'Name, description, why, and a valid start date are required.';
+        return;
+      }
+      const slug = fields.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      if (!slug) { status.textContent = 'The name needs at least one letter or number.'; return; }
+
+      const submit = form.querySelector<HTMLButtonElement>('button[type=submit]')!;
+      submit.disabled = true;
+      status.textContent = 'Creating the project…';
+      try {
+        const folders = await listProjectFolders(token);
+        if (folders.some((name) => name.replace(/^\d+-/, '') === slug)) {
+          throw new Error('A project with that name already exists.');
+        }
+        const nextId = String(Math.max(0, ...folders.map((name) => Number(/^(\d+)/.exec(name)?.[1] ?? 0))) + 1).padStart(3, '0');
+        const folder = `${nextId}-${slug}`;
+        const metadata = {
+          id: nextId,
+          slug,
+          name: fields.name,
+          description: fields.description,
+          why: fields.why,
+          status: fields.status,
+          privacy: 'public',
+          startDate: fields.startDate,
+          updatedDate: fields.startDate,
+        };
+        const indexMd = `---\n${stringify(metadata, { lineWidth: 0 }).trimEnd()}\n---\n`;
+        await putFile(token, `src/content/projects/${folder}/index.md`, encodeText(indexMd), `Add ${fields.name} from the hosted editor`);
+        await putFile(token, `src/content/projects/${folder}/artifacts/.gitkeep`, '', `Add artifacts folder for ${fields.name}`);
+        form.reset();
+        status.innerHTML = '';
+        const note = document.createElement('span');
+        note.append('Created. The site rebuilds in about a minute — then it lives at ');
+        const link = document.createElement('a');
+        link.href = `${projectsBase}/${slug}`;
+        link.textContent = `${projectsBase}/${slug}`;
+        note.append(link, '.');
+        status.append(note);
+      } catch (error) {
+        if ((error as { status?: number }).status === 401) connection.invalidate();
+        status.textContent = (error as Error).message || 'The project could not be created.';
+      } finally {
+        submit.disabled = false;
+      }
+    });
+  }
+</script>

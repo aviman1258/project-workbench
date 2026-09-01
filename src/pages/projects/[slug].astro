@@ -106,7 +106,7 @@ const projectFolder = await getProjectFolder(project);
               ? 'Images, documents, and recordings stored alongside this project.'
               : 'Images, documents, and recordings stored alongside this project. Drop files onto the carousel to add them, drag the tiles to reorder.'}
           </p>
-          {!publicOnlyBuild && <button type="button" class="media-add-button" data-media-browse>＋ Add media</button>}
+          <button type="button" class="media-add-button" {...(publicOnlyBuild ? { 'data-remote-media-open': true } : { 'data-media-browse': true })}>＋ Add media</button>
         </div>
       </div>
       {!publicOnlyBuild && <input type="file" multiple accept=".png,.jpg,.jpeg,.pdf,.mp4" hidden data-media-input />}

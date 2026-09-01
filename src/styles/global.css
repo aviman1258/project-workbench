@@ -3,14 +3,14 @@
   --ink: #17231e;
   --ink-soft: #4e5d56;
   --ink-faint: #718078;
-  --paper: #f5f4ee;
-  --surface: #fbfaf6;
-  --surface-strong: #ffffff;
-  --line: #d9ddd6;
-  --line-strong: #b9c2ba;
+  --paper: #e9e6da;
+  --surface: #f0ede2;
+  --surface-strong: #f7f4ea;
+  --line: #cdd1c6;
+  --line-strong: #a5afa4;
   --forest: #244c3b;
   --forest-dark: #172c24;
-  --moss: #dce7dc;
+  --moss: #cfdccf;
   --ochre: #a5622c;
   --ochre-light: #f0e3d5;
   --blue: #355f72;
@@ -1520,7 +1520,7 @@ a {
   gap: 22px;
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius-md);
-  background: rgb(251 250 246 / 45%);
+  background: rgb(240 237 226 / 45%);
 }
 
 .artifact-empty--dropzone {

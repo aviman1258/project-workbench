@@ -22,7 +22,7 @@ const avatar = withBase('/profile-avatar-circle.png');
     <meta name="viewport" content="width=device-width" />
     <meta name="description" content={description} />
     <meta name="robots" content="noindex, nofollow" />
-    <meta name="theme-color" content="#f5f4ee" />
+    <meta name="theme-color" content="#e9e6da" />
     <link rel="icon" href={`${avatar}?v=3`} type="image/png" sizes="any" />
     <link rel="shortcut icon" href={`${avatar}?v=3`} type="image/png" />
     <link rel="apple-touch-icon" href={`${avatar}?v=3`} />
@@ -43,7 +43,7 @@ const avatar = withBase('/profile-avatar-circle.png');
           </span>
         </a>
         <div class="site-actions">
-          {!publicOnlyBuild && <a class="site-action" href={withBase('/manage')}>+ Add project</a>}
+          <a class="site-action" href={withBase('/manage')}>+ Add project</a>
           {!publicOnlyBuild && (
             <div class="local-indicator" title="This portfolio is configured for local use only">
               <span aria-hidden="true"></span>

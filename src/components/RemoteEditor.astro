@@ -2,6 +2,7 @@
 import type { CollectionEntry } from 'astro:content';
 import { projectStatuses } from '../lib/project-schema';
 import { formatLabel } from '../lib/projects';
+import GitHubConnect from './GitHubConnect.astro';
 
 // Hosted-site editor: commits changes straight to the GitHub repo. The push
 // triggers the Pages workflow, so saves appear on the site about a minute later.
@@ -21,22 +22,7 @@ const { data } = project;
   </div>
 
   <div class="project-editor__tools" data-remote-editor data-project-folder={folder}>
-    <details class="remote-token-panel" data-remote-token-panel>
-      <summary><span aria-hidden="true">◆</span><span data-remote-token-label>Connect GitHub to edit</span></summary>
-      <div class="compact-form">
-        <p class="remote-editor-hint">
-          Paste a fine-grained personal access token with <strong>Contents: read and write</strong> on
-          <code>aviman1258/project-workbench</code>. It is stored only in this browser.
-          <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">Create one on GitHub ↗</a>
-        </p>
-        <label class="field"><span>Access token</span><input type="password" data-remote-token-input autocomplete="off" placeholder="github_pat_…" /></label>
-        <div class="compact-form__actions">
-          <p class="form-status" data-remote-token-status aria-live="assertive"></p>
-          <button class="primary-button" type="button" data-remote-token-save>Connect</button>
-          <button class="remote-forget-button" type="button" data-remote-token-forget hidden>Forget token</button>
-        </div>
-      </div>
-    </details>
+    <GitHubConnect />
 
     <details data-remote-edit-panel hidden>
       <summary><span aria-hidden="true">✦</span><span>Edit project details</span></summary>
@@ -71,110 +57,42 @@ const { data } = project;
 
 <script>
   import { parse, stringify } from 'yaml';
-
-  const OWNER = 'aviman1258';
-  const REPO = 'project-workbench';
-  const BRANCH = 'main';
-  const TOKEN_KEY = 'workbench-github-token';
+  import { encodeText, getFile, putFile, wireTokenPanel } from '../lib/github-client';
 
   const root = document.querySelector<HTMLElement>('[data-remote-editor]');
   if (root) {
     const folder = root.dataset.projectFolder ?? '';
     const indexPath = `src/content/projects/${folder}/index.md`;
-
-    const tokenPanel = root.querySelector<HTMLDetailsElement>('[data-remote-token-panel]')!;
-    const tokenLabel = root.querySelector<HTMLElement>('[data-remote-token-label]')!;
-    const tokenInput = root.querySelector<HTMLInputElement>('[data-remote-token-input]')!;
-    const tokenStatus = root.querySelector<HTMLElement>('[data-remote-token-status]')!;
-    const forgetButton = root.querySelector<HTMLButtonElement>('[data-remote-token-forget]')!;
     const editPanel = root.querySelector<HTMLDetailsElement>('[data-remote-edit-panel]')!;
     const mediaPanel = root.querySelector<HTMLDetailsElement>('[data-remote-media-panel]')!;
 
     let token = '';
-    try { token = window.localStorage.getItem(TOKEN_KEY) ?? ''; } catch { /* private mode */ }
+    const connection = wireTokenPanel(root, (next) => {
+      token = next;
+      editPanel.hidden = !token;
+      mediaPanel.hidden = !token;
+    });
 
-    const setConnected = (connected: boolean) => {
-      editPanel.hidden = !connected;
-      mediaPanel.hidden = !connected;
-      forgetButton.hidden = !connected;
-      tokenLabel.textContent = connected ? 'GitHub connected' : 'Connect GitHub to edit';
-      if (connected) tokenPanel.open = false;
+    // The "＋ Add media" button in the artifacts section jumps to this editor.
+    document.querySelector('[data-remote-media-open]')?.addEventListener('click', () => {
+      const target = token ? mediaPanel : root.querySelector<HTMLDetailsElement>('[data-remote-token-panel]');
+      if (target) target.open = true;
+      root.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (token) root.querySelector<HTMLInputElement>('[data-remote-media-input]')?.focus();
+    });
+    const handleAuthFailure = (error: unknown) => {
+      if ((error as { status?: number }).status === 401) connection.invalidate();
     };
-    setConnected(Boolean(token));
-
-    const gh = async (path: string, init: RequestInit = {}) => {
-      const response = await fetch(`https://api.github.com${path}`, {
-        ...init,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-          ...(init.headers ?? {}),
-        },
-      });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const message = typeof (body as Record<string, unknown>).message === 'string' ? (body as Record<string, string>).message : `GitHub returned ${response.status}.`;
-        const error = new Error(message) as Error & { status?: number };
-        error.status = response.status;
-        throw error;
-      }
-      return body as Record<string, any>;
-    };
-
-    const encodeText = (text: string) => {
-      const bytes = new TextEncoder().encode(text);
-      let binary = '';
-      for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-      return btoa(binary);
-    };
-    const decodeContent = (base64: string) =>
-      new TextDecoder().decode(Uint8Array.from(atob(base64.replace(/\n/g, '')), (c) => c.charCodeAt(0)));
-
-    const getFile = async (path: string) => {
-      const file = await gh(`/repos/${OWNER}/${REPO}/contents/${path}?ref=${BRANCH}`);
-      return { sha: String(file.sha), text: decodeContent(String(file.content)) };
-    };
-    const putFile = (path: string, contentBase64: string, message: string, sha?: string) =>
-      gh(`/repos/${OWNER}/${REPO}/contents/${path}`, {
-        method: 'PUT',
-        body: JSON.stringify({ message, content: contentBase64, branch: BRANCH, ...(sha ? { sha } : {}) }),
-      });
 
     const patchFrontmatter = async (patch: Record<string, unknown>, message: string) => {
-      const { sha, text } = await getFile(indexPath);
+      const { sha, text } = await getFile(token, indexPath);
       const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
       if (!match) throw new Error('index.md is missing YAML front matter.');
       const metadata = { ...(parse(match[1]) as Record<string, unknown>), ...patch, updatedDate: new Date().toISOString().slice(0, 10) };
       const body = text.slice(match[0].length).replace(/^\r?\n/, '');
       const next = `---\n${stringify(metadata, { lineWidth: 0 }).trimEnd()}\n---\n${body ? `\n${body}` : ''}`;
-      await putFile(indexPath, encodeText(next), message, sha);
+      await putFile(token, indexPath, encodeText(next), message, sha);
     };
-
-    // --- connect / forget ---
-    root.querySelector('[data-remote-token-save]')?.addEventListener('click', async () => {
-      const candidate = tokenInput.value.trim();
-      if (!candidate) { tokenStatus.textContent = 'Paste a token first.'; return; }
-      token = candidate;
-      tokenStatus.textContent = 'Checking access…';
-      try {
-        const repo = await gh(`/repos/${OWNER}/${REPO}`);
-        if (!repo.permissions?.push) throw new Error('That token cannot write to the repository.');
-        try { window.localStorage.setItem(TOKEN_KEY, token); } catch { /* ignore */ }
-        tokenInput.value = '';
-        tokenStatus.textContent = 'Connected.';
-        setConnected(true);
-      } catch (error) {
-        token = '';
-        tokenStatus.textContent = (error as Error).message || 'That token did not work.';
-      }
-    });
-    forgetButton.addEventListener('click', () => {
-      token = '';
-      try { window.localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
-      tokenStatus.textContent = 'Token forgotten.';
-      setConnected(false);
-    });
 
     // --- edit fields ---
     const editForm = root.querySelector<HTMLFormElement>('[data-remote-edit-form]')!;
@@ -200,7 +118,7 @@ const { data } = project;
         await patchFrontmatter(fields, `Update ${fields.name} from the hosted editor`);
         editStatus.textContent = 'Committed. The site rebuilds in about a minute.';
       } catch (error) {
-        if ((error as { status?: number }).status === 401) setConnected(false);
+        handleAuthFailure(error);
         editStatus.textContent = (error as Error).message || 'The commit failed.';
       } finally {
         submit.disabled = false;
@@ -230,6 +148,7 @@ const { data } = project;
           reader.readAsDataURL(file);
         });
         await putFile(
+          token,
           `src/content/projects/${folder}/artifacts/${filename}`,
           dataUrl.slice(dataUrl.indexOf(',') + 1),
           `Add ${filename} from the hosted editor`,
@@ -238,7 +157,7 @@ const { data } = project;
         mediaInput.value = '';
         mediaStatus.textContent = 'Committed. The site rebuilds in about a minute.';
       } catch (error) {
-        if ((error as { status?: number }).status === 401) setConnected(false);
+        handleAuthFailure(error);
         mediaStatus.textContent = (error as Error).message || 'The upload failed.';
       }
     });

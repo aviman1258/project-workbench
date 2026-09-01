@@ -1,7 +1,8 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import RemoteCreate from '../components/RemoteCreate.astro';
 import { privacyLevels, projectStatuses } from '../lib/project-schema';
-import { formatLabel, withBase } from '../lib/projects';
+import { formatLabel, publicOnlyBuild, withBase } from '../lib/projects';
 
 const today = new Date().toISOString().slice(0, 10);
 ---
@@ -10,6 +11,9 @@ const today = new Date().toISOString().slice(0, 10);
   <div class="page-shell editor-page">
     <a class="back-link" href={withBase('/')}>← Portfolio index</a>
 
+    {publicOnlyBuild && <RemoteCreate />}
+
+    {!publicOnlyBuild && (
     <header class="editor-hero">
       <div>
         <p class="eyebrow">Local editor</p>
@@ -21,7 +25,9 @@ const today = new Date().toISOString().slice(0, 10);
         <p><strong>Writes to your project folder</strong><br />Available while <code>npm run dev</code> is running. Creating asks for your device unlock.</p>
       </aside>
     </header>
+    )}
 
+    {!publicOnlyBuild && (
     <form class="editor-form" data-project-form novalidate>
       <section class="ai-fill-panel" data-ai-fill-panel>
         <div class="ai-fill-panel__intro">
@@ -107,6 +113,7 @@ const today = new Date().toISOString().slice(0, 10);
         <button class="primary-button" type="submit">Create project →</button>
       </div>
     </form>
+    )}
   </div>
 </BaseLayout>
 
