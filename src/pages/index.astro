@@ -2,8 +2,7 @@
 import { getCollection } from 'astro:content';
 import ProjectCard from '../components/ProjectCard.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { listedProjects } from '../lib/projects';
-const projects = listedProjects(await getCollection('projects')).sort((a, b) => b.data.updatedDate.getTime() - a.data.updatedDate.getTime());
+const projects = (await getCollection('projects')).sort((a, b) => b.data.updatedDate.getTime() - a.data.updatedDate.getTime());
 const stats = [
   { label: 'Ideas', value: projects.filter((project) => project.data.status === 'idea').length },
   { label: 'In development', value: projects.filter((project) => project.data.status === 'dev').length },

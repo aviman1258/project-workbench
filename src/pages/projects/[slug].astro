@@ -2,12 +2,14 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
 import StatusBadge from '../../components/StatusBadge.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { formatDate, formatLabel, getProjectFolder, listedProjects, loadArtifacts, publicOnlyBuild, withBase } from '../../lib/projects';
+import { formatDate, formatLabel, getProjectFolder, loadArtifacts, publicOnlyBuild, withBase } from '../../lib/projects';
 import RemoteEditor from '../../components/RemoteEditor.astro';
+import PrivateVault from '../../components/PrivateVault.astro';
 import { privacyLevels, projectStatuses } from '../../lib/project-schema';
 
 export async function getStaticPaths() {
-  const projects = listedProjects(await getCollection('projects'));
+  // Private projects build too: in public deploys they are generated locked stubs.
+  const projects = await getCollection('projects');
   return projects.map((project) => ({ params: { slug: project.data.slug }, props: { project } }));
 }
 
@@ -20,6 +22,7 @@ const { data } = project;
 const artifacts = await loadArtifacts(project);
 const privateProject = data.privacy === 'private';
 const projectFolder = await getProjectFolder(project);
+const lockedView = publicOnlyBuild && privateProject;
 ---
 
 <BaseLayout title={data.name} description={data.description}>
@@ -44,9 +47,13 @@ const projectFolder = await getProjectFolder(project);
       <div><dt>Updated</dt><dd><time datetime={data.updatedDate.toISOString()}>{formatDate(data.updatedDate)}</time></dd></div>
     </dl>
 
+    {!lockedView && (
     <nav class="section-nav" aria-label="Project sections"><a href="#overview">Overview</a><a href="#artifacts">Artifacts <span>{artifacts.length}</span></a></nav>
+    )}
 
-    {publicOnlyBuild && <RemoteEditor project={project} folder={projectFolder} />}
+    {lockedView && <PrivateVault id={data.id} />}
+
+    {publicOnlyBuild && !privateProject && <RemoteEditor project={project} folder={projectFolder} />}
 
     {!publicOnlyBuild && (
     <section class="project-editor" aria-labelledby="project-editor-title">
@@ -90,12 +97,15 @@ const projectFolder = await getProjectFolder(project);
     </section>
     )}
 
+    {!lockedView && (
     <article class="case-study" id="overview">
       <div class="section-kicker"><span>01</span> Overview</div>
       <div class="section-heading section-heading--detail"><div><h2>Why it was built</h2></div></div>
       <div class="prose"><p>{data.why}</p></div>
     </article>
+    )}
 
+    {!lockedView && (
     <section class="artifacts-section" id="artifacts" {...(publicOnlyBuild ? {} : { 'data-media-section': true, 'data-project-slug': data.slug })}>
       <div class="section-kicker"><span>02</span> Supporting artifacts</div>
       <div class="section-heading section-heading--detail">
@@ -189,6 +199,7 @@ const projectFolder = await getProjectFolder(project);
       </dialog>
       )}
     </section>
+    )}
   </div>
 </BaseLayout>
 

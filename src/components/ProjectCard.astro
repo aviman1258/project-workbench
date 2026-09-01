@@ -1,6 +1,6 @@
 ---
 import type { CollectionEntry } from 'astro:content';
-import { loadArtifacts, withBase } from '../lib/projects';
+import { loadArtifacts, publicOnlyBuild, withBase } from '../lib/projects';
 
 interface Props {
   project: CollectionEntry<'projects'>;
@@ -23,10 +23,10 @@ const privateProject = data.privacy === 'private';
   data-project-name={data.name}
   data-project-updated={data.updatedDate.getTime()}
 >
-  <h2><a href={withBase(`/projects/${data.slug}`)} data-private-project-link={privateProject ? 'true' : undefined}>{data.name}</a></h2>
+  <h2><a href={withBase(`/projects/${data.slug}`)} data-private-project-link={privateProject && !publicOnlyBuild ? 'true' : undefined}>{data.name}</a></h2>
 
   {privateProject ? (
-    <a class="project-card__locked" href={withBase(`/projects/${data.slug}`)} data-private-project-link="true" aria-label={`Unlock ${data.name}`}>
+    <a class="project-card__locked" href={withBase(`/projects/${data.slug}`)} data-private-project-link={publicOnlyBuild ? undefined : 'true'} aria-label={`Unlock ${data.name}`}>
       <span class="artifact-privacy-lock artifact-privacy-lock--card" aria-hidden="true">
         <svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
       </span>

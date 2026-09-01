@@ -1,0 +1,120 @@
+---
+import GitHubConnect from './GitHubConnect.astro';
+
+// Locked view of a private project on the hosted site. The build only knows the
+// project's id and dates; everything else lives in the private vault repo and is
+// fetched client-side after the viewer connects an authorized GitHub token.
+interface Props {
+  id: string;
+}
+
+const { id } = Astro.props;
+---
+
+<section class="project-editor private-vault" aria-labelledby="private-vault-title" data-private-vault data-vault-id={id}>
+  <div class="project-editor__intro">
+    <div><p class="eyebrow">Private project</p><h2 id="private-vault-title">Locked</h2></div>
+    <p>The write-up and media live in a private repository. Connect GitHub with an authorized account to view them here.</p>
+  </div>
+
+  <div class="project-editor__tools">
+    <GitHubConnect />
+    <p class="form-status" data-vault-status aria-live="polite"></p>
+  </div>
+
+  <article class="vault-content" data-vault-content hidden>
+    <div class="section-kicker"><span>01</span> Overview</div>
+    <div class="section-heading section-heading--detail"><div><h2>Why it was built</h2></div></div>
+    <div class="prose"><p data-vault-why></p></div>
+
+    <div class="section-kicker vault-media-kicker"><span>02</span> Supporting artifacts</div>
+    <div class="vault-media" data-vault-media></div>
+  </article>
+</section>
+
+<script>
+  import { parse } from 'yaml';
+  import { findVaultFolder, getVaultText, getVaultBlobUrl, listVaultArtifacts, wireTokenPanel } from '../lib/github-client';
+
+  const root = document.querySelector<HTMLElement>('[data-private-vault]');
+  if (root) {
+    const id = root.dataset.vaultId ?? '';
+    const status = root.querySelector<HTMLElement>('[data-vault-status]')!;
+    const content = root.querySelector<HTMLElement>('[data-vault-content]')!;
+    const whyEl = root.querySelector<HTMLElement>('[data-vault-why]')!;
+    const mediaEl = root.querySelector<HTMLElement>('[data-vault-media]')!;
+    let loaded = false;
+
+    const mime = (name: string) =>
+      /\.pdf$/i.test(name) ? 'application/pdf'
+      : /\.mp4$/i.test(name) ? 'video/mp4'
+      : /\.png$/i.test(name) ? 'image/png'
+      : 'image/jpeg';
+
+    const unlock = async (token: string) => {
+      if (loaded || !token) return;
+      status.textContent = 'Unlocking…';
+      try {
+        const folder = await findVaultFolder(token, id);
+        if (!folder) throw new Error('This account cannot see the private project.');
+        const text = await getVaultText(token, `projects/${folder}/index.md`);
+        const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
+        const metadata = match ? (parse(match[1]) as Record<string, unknown>) : {};
+
+        // reveal the real name and description in the hero
+        const hero = document.querySelector('.project-hero__main');
+        const title = hero?.querySelector('h1');
+        const description = hero?.querySelector('p');
+        if (title && typeof metadata.name === 'string') title.textContent = metadata.name;
+        if (description && typeof metadata.description === 'string') description.textContent = metadata.description;
+        whyEl.textContent = typeof metadata.why === 'string' ? metadata.why : '';
+
+        content.hidden = false;
+        status.textContent = 'Loading media…';
+        const artifacts = await listVaultArtifacts(token, folder);
+        mediaEl.replaceChildren();
+        for (const artifact of artifacts) {
+          const url = await getVaultBlobUrl(token, artifact.path, mime(artifact.name));
+          let element: HTMLElement;
+          if (/\.mp4$/i.test(artifact.name)) {
+            const video = document.createElement('video');
+            video.src = url;
+            video.controls = true;
+            element = video;
+          } else if (/\.pdf$/i.test(artifact.name)) {
+            const link = document.createElement('a');
+            link.href = url;
+            link.target = '_blank';
+            link.rel = 'noreferrer';
+            link.className = 'vault-media__pdf';
+            link.textContent = `▤ ${artifact.name} (open PDF)`;
+            element = link;
+          } else {
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = artifact.name;
+            element = img;
+          }
+          const figure = document.createElement('figure');
+          figure.append(element);
+          const caption = document.createElement('figcaption');
+          caption.textContent = artifact.name;
+          figure.append(caption);
+          mediaEl.append(figure);
+        }
+        if (!artifacts.length) {
+          const empty = document.createElement('p');
+          empty.className = 'remote-editor-hint';
+          empty.textContent = 'No media attached to this project.';
+          mediaEl.append(empty);
+        }
+        status.textContent = 'Unlocked.';
+        loaded = true;
+      } catch (error) {
+        status.textContent = (error as Error).message || 'The private content could not be loaded.';
+      }
+    };
+
+    wireTokenPanel(root, (token) => { void unlock(token); });
+  }
+</script>

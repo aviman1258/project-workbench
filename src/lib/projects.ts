@@ -54,6 +54,8 @@ export async function getProjectFolder(project: CollectionEntry<'projects'>): Pr
 export async function loadArtifacts(
   project: CollectionEntry<'projects'>,
 ): Promise<ProjectArtifact[]> {
+  // Public builds must never emit private artifacts (their media lives in the vault).
+  if (publicOnlyBuild && project.data.privacy === 'private') return [];
   const artifactRoot = path.join(projectsRoot, await getProjectFolder(project), 'artifacts');
   const orderRank = new Map((project.data.artifactOrder ?? []).map((name, index) => [name, index]));
   let entries;

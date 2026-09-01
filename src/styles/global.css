@@ -1561,6 +1561,50 @@ a {
   pointer-events: none;
 }
 
+.vault-content {
+  padding: 26px 18px 10px;
+}
+
+.vault-media-kicker {
+  margin-top: 30px;
+}
+
+.vault-media {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.vault-media figure {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-strong);
+}
+
+.vault-media img,
+.vault-media video {
+  width: 100%;
+  display: block;
+}
+
+.vault-media figcaption {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--ink-faint);
+  overflow-wrap: anywhere;
+  border-top: 1px solid var(--line);
+}
+
+.vault-media__pdf {
+  display: block;
+  padding: 26px 14px;
+  color: var(--forest);
+  font-size: 14px;
+}
+
 .remote-editor-hint {
   margin: 0 0 14px;
   color: var(--ink-soft);

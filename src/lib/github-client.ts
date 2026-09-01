@@ -75,6 +75,44 @@ export async function listProjectFolders(token: string): Promise<string[]> {
     .map((entry) => entry.name);
 }
 
+// --- private vault (workbench-private) ---
+export const VAULT_REPO = 'workbench-private';
+
+export async function findVaultFolder(token: string, id: string): Promise<string | null> {
+  const entries = await gh(token, `/repos/${GITHUB_OWNER}/${VAULT_REPO}/contents/projects`);
+  const folder = (entries as unknown as { type: string; name: string }[])
+    .find((entry) => entry.type === 'dir' && entry.name.startsWith(`${id}-`));
+  return folder ? folder.name : null;
+}
+
+export async function getVaultText(token: string, path: string): Promise<string> {
+  const file = await gh(token, `/repos/${GITHUB_OWNER}/${VAULT_REPO}/contents/${path}`);
+  return decodeContent(String(file.content));
+}
+
+export async function listVaultArtifacts(token: string, folder: string): Promise<{ name: string; path: string; size: number }[]> {
+  try {
+    const entries = await gh(token, `/repos/${GITHUB_OWNER}/${VAULT_REPO}/contents/projects/${folder}/artifacts`);
+    return (entries as unknown as { type: string; name: string; path: string; size: number }[])
+      .filter((entry) => entry.type === 'file' && /\.(png|jpe?g|pdf|mp4)$/i.test(entry.name));
+  } catch {
+    return [];
+  }
+}
+
+// Raw media type streams the file bytes directly (works for large artifacts too).
+export async function getVaultBlobUrl(token: string, path: string, mimeType: string): Promise<string> {
+  const response = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${VAULT_REPO}/contents/${path}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github.raw+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  });
+  if (!response.ok) throw new Error(`GitHub ${response.status} fetching ${path}`);
+  return URL.createObjectURL(new Blob([await response.arrayBuffer()], { type: mimeType }));
+}
+
 // Wires the shared "Connect GitHub" panel markup. onChange fires with the current
 // token whenever the connection state changes (including on load).
 export function wireTokenPanel(root: HTMLElement, onChange: (token: string) => void) {
