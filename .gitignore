@@ -1,0 +1,8 @@
+node_modules/
+.npm-cache/
+dist/
+.astro/
+.tmp/
+.DS_Store
+*.log
+.portfolio-auth.json

@@ -1,0 +1,337 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { privacyLevels, projectStatuses } from '../lib/project-schema';
+import { formatLabel } from '../lib/projects';
+
+const today = new Date().toISOString().slice(0, 10);
+---
+
+<BaseLayout title="Add a project" description="Create a new local portfolio project from the browser.">
+  <div class="page-shell editor-page">
+    <a class="back-link" href="/">← Portfolio index</a>
+
+    <header class="editor-hero">
+      <div>
+        <p class="eyebrow">Local editor</p>
+        <h1>Add a project.</h1>
+        <p>Capture what it is, why you built it, and where it stands.</p>
+      </div>
+      <aside class="editor-note">
+        <span aria-hidden="true">●</span>
+        <p><strong>Writes to your project folder</strong><br />Available while <code>npm run dev</code> is running.</p>
+      </aside>
+    </header>
+
+    <form class="editor-form" data-project-form novalidate>
+      <section class="ai-fill-panel" data-ai-fill-panel>
+        <div class="ai-fill-panel__intro">
+          <div>
+            <p class="eyebrow">Draft from the code</p>
+            <h2>Fill in with AI.</h2>
+            <p>Give AI a source-code repository to inspect, then review the short project draft before saving it.</p>
+          </div>
+          <span class="ai-fill-panel__local">Read-only analysis</span>
+        </div>
+
+        <div class="repository-fill">
+          <div class="repository-fill__heading">
+            <div><strong>Analyze a repository</strong><p>Paste the main GitHub, Azure DevOps, GitLab, or Bitbucket address. The PC analyzes a temporary copy, then removes it.</p></div>
+            <span>Public or private</span>
+          </div>
+          <label class="field">
+            <span>Repository address</span>
+            <input type="url" data-repository-url maxlength="500" placeholder="https://github.com/owner/repository" inputmode="url" autocapitalize="none" autocomplete="off" />
+            <small>If a private repository cannot be opened, the app will ask you to sign in safely.</small>
+          </label>
+          <div class="repository-fill__actions">
+            <button type="button" data-repository-mode="strict">Analyze exact facts</button>
+            <button type="button" data-repository-mode="inferred">Analyze + infer why</button>
+          </div>
+          <div class="repository-auth" data-repository-auth hidden></div>
+        </div>
+
+        <div class="ai-fill-result" data-ai-fill-result aria-live="polite"></div>
+        <p class="ai-fill-privacy">Repository evidence is processed through your signed-in Codex session. Passwords and access tokens are never collected by this form.</p>
+      </section>
+
+      <section class="editor-form__section">
+        <div class="editor-form__heading">
+          <span>01</span>
+          <div><h2>Project</h2><p>The small set of details worth keeping.</p></div>
+        </div>
+
+        <label class="field">
+          <span>Name</span>
+          <input name="name" required maxlength="120" placeholder="A useful name for the project" autofocus />
+        </label>
+        <label class="field">
+          <span>Description</span>
+          <textarea name="description" required maxlength="500" rows="3" placeholder="What does it do?"></textarea>
+        </label>
+        <label class="field">
+          <span>Why it was built</span>
+          <textarea name="why" required maxlength="3000" rows="6" placeholder="What problem, curiosity, or need made you build it?"></textarea>
+        </label>
+      </section>
+
+      <section class="editor-form__section">
+        <div class="editor-form__heading">
+          <span>02</span>
+          <div><h2>State</h2><p>Just enough context to understand where the project stands.</p></div>
+        </div>
+        <div class="form-grid form-grid--three classification-grid">
+          <label class="field">
+            <span>Status</span>
+            <select name="status" required>
+              <option value="">Choose status</option>
+              {projectStatuses.map((value) => <option value={value}>{formatLabel(value)}</option>)}
+            </select>
+          </label>
+          <label class="field">
+            <span>Privacy</span>
+            <select name="privacy" required>
+              <option value="">Choose privacy</option>
+              {privacyLevels.map((value) => <option value={value}>{formatLabel(value)}</option>)}
+            </select>
+          </label>
+          <label class="field">
+            <span>Start date</span>
+            <input name="startDate" type="date" value={today} required />
+          </label>
+        </div>
+        <input name="updatedDate" type="hidden" value={today} />
+      </section>
+
+      <div class="editor-form__actions">
+        <p class="form-status" data-form-status aria-live="assertive"></p>
+        <button class="primary-button" type="submit">Create project →</button>
+      </div>
+    </form>
+  </div>
+</BaseLayout>
+
+<script>
+  type RepositoryError = Error & { field?: string; authRequired?: boolean; authProvider?: string };
+
+  const form = document.querySelector<HTMLFormElement>('[data-project-form]');
+  const statusMessage = document.querySelector<HTMLElement>('[data-form-status]');
+  const aiPanel = document.querySelector<HTMLElement>('[data-ai-fill-panel]');
+  const aiResult = document.querySelector<HTMLElement>('[data-ai-fill-result]');
+  const repositoryUrl = document.querySelector<HTMLInputElement>('[data-repository-url]');
+  const repositoryButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-repository-mode]')];
+  const repositoryAuth = document.querySelector<HTMLElement>('[data-repository-auth]');
+
+  const clearFormError = () => {
+    form?.querySelectorAll<HTMLElement>('.field--invalid').forEach((field) => field.classList.remove('field--invalid'));
+    form?.querySelectorAll<HTMLElement>('[aria-invalid="true"]').forEach((control) => control.removeAttribute('aria-invalid'));
+    form?.querySelectorAll<HTMLElement>('[data-field-error]').forEach((message) => message.remove());
+    statusMessage?.classList.remove('form-status--error');
+    if (statusMessage) statusMessage.textContent = '';
+  };
+
+  const clearFieldError = (name: string) => {
+    if (!form || !name) return;
+    const control = form.elements.namedItem(name);
+    if (!(control instanceof HTMLElement)) return;
+    const field = control.closest<HTMLElement>('.field');
+    field?.classList.remove('field--invalid');
+    control.removeAttribute('aria-invalid');
+    field?.querySelector<HTMLElement>('[data-field-error]')?.remove();
+  };
+
+  const showFormError = (message: string, fieldName?: string) => {
+    clearFormError();
+    if (statusMessage) {
+      statusMessage.classList.add('form-status--error');
+      statusMessage.textContent = `Couldn’t create the project: ${message}`;
+    }
+    if (!form || !fieldName) return;
+    const control = form.elements.namedItem(fieldName);
+    if (!(control instanceof HTMLElement)) return;
+    const field = control.closest<HTMLElement>('.field');
+    if (!field) return;
+    field.classList.add('field--invalid');
+    control.setAttribute('aria-invalid', 'true');
+    const detail = document.createElement('p');
+    detail.className = 'field-error';
+    detail.dataset.fieldError = '';
+    detail.textContent = message;
+    field.append(detail);
+    control.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    window.setTimeout(() => control.focus(), 250);
+  };
+
+  form?.addEventListener('input', (event) => clearFieldError((event.target as HTMLInputElement).name));
+  form?.addEventListener('change', (event) => clearFieldError((event.target as HTMLInputElement).name));
+
+  const setControlValue = (name: string, value: string) => {
+    if (!form || !value) return false;
+    const control = form.elements.namedItem(name);
+    if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement)) return false;
+    if (control instanceof HTMLSelectElement && ![...control.options].some((option) => option.value === value)) return false;
+    if (control.value.trim() && !['status', 'privacy', 'startDate', 'updatedDate'].includes(name)) return false;
+    control.value = value;
+    control.dispatchEvent(new Event('input', { bubbles: true }));
+    control.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  };
+
+  const applyAiDraft = (draft: Record<string, unknown>) => {
+    let filled = 0;
+    for (const name of ['name', 'description', 'why', 'status', 'privacy', 'startDate', 'updatedDate'] as const) {
+      if (setControlValue(name, String(draft[name] ?? ''))) filled += 1;
+    }
+    return filled;
+  };
+
+  const showRepositoryAuthentication = (provider: 'github' | 'azure', retry: () => void) => {
+    if (!repositoryAuth) return;
+    const providerName = provider === 'azure' ? 'your Microsoft work account' : 'GitHub';
+    repositoryAuth.hidden = false;
+    repositoryAuth.replaceChildren();
+    const message = document.createElement('p');
+    message.textContent = `This private repository needs access through ${providerName}.`;
+    const signIn = document.createElement('button');
+    signIn.type = 'button';
+    signIn.textContent = provider === 'azure' ? 'Sign in with Microsoft' : 'Sign in with GitHub';
+    repositoryAuth.append(message, signIn);
+
+    signIn.addEventListener('click', async () => {
+      signIn.disabled = true;
+      signIn.textContent = 'Starting secure sign-in…';
+      try {
+        const response = await fetch('/api/local/repository-auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider, repositoryUrl: repositoryUrl?.value ?? '' }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? 'Repository sign-in could not start.');
+        repositoryAuth.replaceChildren();
+        const instructions = document.createElement('p');
+        instructions.textContent = result.userCode
+          ? `Open ${provider === 'azure' ? 'Microsoft' : 'GitHub'}, enter this one-time code, approve access, then retry.`
+          : `${provider === 'azure' ? 'Microsoft' : 'GitHub'} access is ready. Retry the repository analysis.`;
+        repositoryAuth.append(instructions);
+        if (result.userCode) {
+          const code = document.createElement('code');
+          code.textContent = String(result.userCode);
+          const link = document.createElement('a');
+          link.href = String(result.verificationUrl ?? 'https://github.com/login/device');
+          link.target = '_blank';
+          link.rel = 'noreferrer';
+          link.textContent = `Open ${provider === 'azure' ? 'Microsoft' : 'GitHub'} sign-in ↗`;
+          repositoryAuth.append(code, link);
+        }
+        const retryButton = document.createElement('button');
+        retryButton.type = 'button';
+        retryButton.textContent = 'I approved it — retry';
+        retryButton.addEventListener('click', retry);
+        repositoryAuth.append(retryButton);
+      } catch (error) {
+        message.textContent = error instanceof Error ? error.message : 'Repository sign-in could not start.';
+        signIn.disabled = false;
+        signIn.textContent = 'Try sign-in again';
+      }
+    });
+  };
+
+  const analyzeRepository = async (mode: 'strict' | 'inferred') => {
+    if (!form || !aiResult || !repositoryUrl) return;
+    const address = repositoryUrl.value.trim();
+    if (!address) {
+      aiResult.className = 'ai-fill-result ai-fill-result--error';
+      aiResult.textContent = 'Enter the repository’s main address first.';
+      repositoryUrl.focus();
+      return;
+    }
+    const name = (form.elements.namedItem('name') as HTMLInputElement | null)?.value ?? '';
+    const description = (form.elements.namedItem('description') as HTMLTextAreaElement | null)?.value ?? '';
+    repositoryButtons.forEach((button) => (button.disabled = true));
+    aiPanel?.classList.add('ai-fill-panel--busy');
+    aiResult.className = 'ai-fill-result ai-fill-result--working';
+    aiResult.textContent = 'Reading the commit history, inspecting the code, and drafting the project…';
+
+    try {
+      const response = await fetch('/api/local/repository-fill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode, repositoryUrl: address, current: { name, description } }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        const error = new Error(result.error ?? 'The repository could not be analyzed.') as RepositoryError;
+        Object.assign(error, result);
+        throw error;
+      }
+      const filled = applyAiDraft(result.draft ?? {});
+      const sourceLabel = Array.isArray(result.sources) ? result.sources[0]?.label : '';
+      aiResult.className = 'ai-fill-result ai-fill-result--success';
+      aiResult.textContent = `${filled ? `Filled ${filled} ${filled === 1 ? 'field' : 'fields'}` : 'No supported details were found'} from ${sourceLabel || 'the repository'}. Review everything before creating the project.`;
+      if (repositoryAuth) repositoryAuth.hidden = true;
+    } catch (error) {
+      const problem = error as RepositoryError;
+      aiResult.className = 'ai-fill-result ai-fill-result--error';
+      aiResult.textContent = problem.message || 'The repository could not be analyzed.';
+      if (problem.authRequired) {
+        showRepositoryAuthentication(problem.authProvider === 'azure' ? 'azure' : 'github', () => void analyzeRepository(mode));
+      }
+    } finally {
+      repositoryButtons.forEach((button) => (button.disabled = false));
+      aiPanel?.classList.remove('ai-fill-panel--busy');
+    }
+  };
+
+  repositoryButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const mode = button.dataset.repositoryMode;
+      if (mode === 'strict' || mode === 'inferred') void analyzeRepository(mode);
+    });
+  });
+
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    clearFormError();
+    const invalid = [...form.elements].find((control) =>
+      control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement
+        ? !control.validity.valid
+        : false,
+    ) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | undefined;
+    if (invalid) {
+      showFormError(invalid.validationMessage || 'This field needs your attention.', invalid.name);
+      return;
+    }
+
+    const formData = new FormData(form);
+    const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (submit) submit.disabled = true;
+    if (statusMessage) statusMessage.textContent = 'Creating the project…';
+    try {
+      const response = await fetch('/api/local/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: String(formData.get('name') ?? ''),
+          description: String(formData.get('description') ?? ''),
+          why: String(formData.get('why') ?? ''),
+          status: String(formData.get('status') ?? ''),
+          privacy: String(formData.get('privacy') ?? ''),
+          startDate: String(formData.get('startDate') ?? ''),
+          updatedDate: String(formData.get('updatedDate') ?? ''),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        const error = new Error(result.error ?? 'The project could not be created.') as RepositoryError;
+        error.field = result.field;
+        throw error;
+      }
+      if (statusMessage) statusMessage.textContent = 'Created. Opening the project…';
+      window.location.href = `/projects/${result.slug}/`;
+    } catch (error) {
+      const problem = error as RepositoryError;
+      showFormError(problem.message || 'The project could not be created.', problem.field);
+      if (submit) submit.disabled = false;
+    }
+  });
+</script>

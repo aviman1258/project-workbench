@@ -1,0 +1,11 @@
+---
+import { formatLabel } from '../lib/projects';
+
+interface Props {
+  status: string;
+}
+
+const { status } = Astro.props;
+---
+
+<span class={`status-badge status-badge--${status}`}>{formatLabel(status)}</span>

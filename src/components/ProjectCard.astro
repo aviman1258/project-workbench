@@ -1,0 +1,78 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { loadArtifacts } from '../lib/projects';
+
+interface Props {
+  project: CollectionEntry<'projects'>;
+}
+
+const { project } = Astro.props;
+const { data } = project;
+const artifacts = await loadArtifacts(project);
+const searchValue = [data.name, data.description, data.why].join(' ').toLowerCase();
+const privateProject = data.privacy === 'private';
+---
+
+<article
+  class="project-card"
+  data-project-card
+  data-status={data.status}
+  data-privacy={data.privacy}
+  data-search={searchValue}
+  data-project-id={data.id}
+  data-project-name={data.name}
+  data-project-updated={data.updatedDate.getTime()}
+>
+  <h2><a href={`/projects/${data.slug}`} data-private-project-link={privateProject ? 'true' : undefined}>{data.name}</a></h2>
+
+  {privateProject ? (
+    <a class="project-card__locked" href={`/projects/${data.slug}`} data-private-project-link="true" aria-label={`Unlock ${data.name}`}>
+      <span class="artifact-privacy-lock artifact-privacy-lock--card" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+      </span>
+      <strong>Unlock private project</strong>
+    </a>
+  ) : artifacts.length > 0 ? (
+    <div class="project-card__carousel" data-project-carousel tabindex={artifacts.length > 1 ? '0' : undefined} aria-label={`${data.name} artifacts`}>
+      <div class="project-card__carousel-viewport">
+        <div class="project-card__carousel-track" data-project-carousel-track>
+          {artifacts.map((artifact, index) => (
+            <a
+              class="project-card__artifact"
+              data-project-carousel-slide
+              href={artifact.href}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`Open ${artifact.filename}`}
+              aria-hidden={index === 0 ? 'false' : 'true'}
+              tabindex={index === 0 ? undefined : '-1'}
+            >
+              {artifact.kind === 'image' ? (
+                <img src={artifact.href} alt={`Preview of ${artifact.filename}`} loading={index === 0 ? 'eager' : 'lazy'} />
+              ) : artifact.kind === 'video' ? (
+                <video src={artifact.href} muted playsinline preload="metadata"></video>
+              ) : (
+                <span class="project-card__document-preview"><b aria-hidden="true">▤</b><strong>{artifact.kind.toUpperCase()}</strong></span>
+              )}
+            </a>
+          ))}
+        </div>
+      </div>
+      {artifacts.length > 1 && (
+        <>
+          <button class="project-card__carousel-button project-card__carousel-button--previous" type="button" data-project-carousel-previous aria-label={`Show previous artifact for ${data.name}`}>←</button>
+          <button class="project-card__carousel-button project-card__carousel-button--next" type="button" data-project-carousel-next aria-label={`Show next artifact for ${data.name}`}>→</button>
+          <div class="project-card__carousel-dots" aria-label={`Choose an artifact for ${data.name}`}>
+            {artifacts.map((artifact, index) => (
+              <button type="button" data-project-carousel-dot data-active={index === 0 ? 'true' : 'false'} aria-label={`Show ${artifact.filename}`} aria-current={index === 0 ? 'true' : undefined}></button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  ) : (
+    <a class="project-card__empty" href={`/projects/${data.slug}`}>
+      <span aria-hidden="true">□</span><strong>No artifacts yet</strong>
+    </a>
+  )}
+</article>

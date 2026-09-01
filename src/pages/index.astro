@@ -1,0 +1,261 @@
+---
+import { getCollection } from 'astro:content';
+import ProjectCard from '../components/ProjectCard.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { formatLabel } from '../lib/projects';
+
+const projects = (await getCollection('projects')).sort((a, b) => b.data.updatedDate.getTime() - a.data.updatedDate.getTime());
+const statuses = [...new Set(projects.map((project) => project.data.status))].sort();
+const privacyLevels = [...new Set(projects.map((project) => project.data.privacy))].sort();
+const stats = [
+  { label: 'Ideas', value: projects.filter((project) => project.data.status === 'idea').length },
+  { label: 'In development', value: projects.filter((project) => project.data.status === 'dev').length },
+  { label: 'In review', value: projects.filter((project) => project.data.status === 'review').length },
+  { label: 'Delivered', value: projects.filter((project) => project.data.status === 'delivered').length },
+];
+---
+
+<BaseLayout>
+  <div class="page-shell home-page">
+    <section class="page-intro" aria-labelledby="portfolio-title">
+      <div>
+        <p class="eyebrow">Product & engineering archive</p>
+        <h1 id="portfolio-title">Ideas I couldn’t leave alone.</h1>
+        <p class="page-intro__copy">A running collection of things I noticed, wondered about, and built just far enough to find out if they were actually useful.</p>
+      </div>
+      <aside class="archive-note"><span aria-hidden="true">↳</span><p><strong>Filesystem-backed</strong><br />Every record below comes from Markdown in Git.</p></aside>
+    </section>
+
+    <section class="stats-grid" aria-label="Portfolio summary">
+      {stats.map((stat) => <div class="stat-card"><strong>{String(stat.value).padStart(2, '0')}</strong><span>{stat.label}</span></div>)}
+    </section>
+
+    <section class="work-section" aria-labelledby="work-heading">
+      <div class="section-heading">
+        <div><p class="eyebrow">Portfolio index</p><h2 id="work-heading">Projects</h2></div>
+        <p class="result-count" aria-live="polite"><strong data-result-count>{projects.length}</strong> visible</p>
+      </div>
+
+      <div class="filter-panel" aria-label="Filter projects">
+        <div class="filter-panel__primary">
+          <label class="search-field">
+            <span>Search</span>
+            <div><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path d="m21 21-4.35-4.35m2.35-5.15a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" /></svg><input data-filter-search type="search" placeholder="Name, description, or why…" autocomplete="off" /></div>
+          </label>
+          <div class="sort-controls" aria-label="Sort projects">
+            <label><span>Sort by</span><select data-sort-field><option value="updated">Updated date</option><option value="id">ID</option><option value="name">Alphabetical</option></select></label>
+            <button class="sort-direction-button" type="button" data-sort-direction data-direction="desc" aria-label="Descending order. Activate for ascending order." title="Descending order"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v16m-5-5 5 5 5-5" /></svg></button>
+          </div>
+        </div>
+        <div class="select-filters">
+          <label><span>Status</span><select data-filter="status"><option value="">All statuses</option>{statuses.map((status) => <option value={status}>{formatLabel(status)}</option>)}</select></label>
+          <label><span>Privacy</span><select data-filter="privacy"><option value="">All privacy levels</option>{privacyLevels.map((privacy) => <option value={privacy}>{formatLabel(privacy)}</option>)}</select></label>
+        </div>
+        <button class="reset-filters" type="button" data-reset-filters hidden>Clear filters</button>
+      </div>
+
+      <aside class="private-unlock-panel" data-private-unlock-panel hidden aria-labelledby="private-unlock-title">
+        <span class="private-unlock-panel__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+        </span>
+        <div>
+          <h3 id="private-unlock-title">Private project</h3>
+          <p>Use this laptop’s Windows Hello method to open it.</p>
+          <p class="private-unlock-panel__status" data-private-unlock-status aria-live="assertive"></p>
+        </div>
+        <button class="primary-button" type="button" data-private-unlock-button>Unlock with Windows Hello</button>
+      </aside>
+
+      <div class="project-grid" data-project-grid>{projects.map((project) => <ProjectCard project={project} />)}</div>
+      <div class="empty-results" data-empty-results hidden><span aria-hidden="true">⌁</span><h3>No matching projects</h3><p>Try a broader search or clear one of the filters.</p><button type="button" data-empty-reset>Clear all filters</button></div>
+    </section>
+  </div>
+</BaseLayout>
+
+<script>
+  import {
+    browserSupportsWebAuthn,
+    startAuthentication,
+    startRegistration,
+  } from '@simplewebauthn/browser';
+
+  const searchInput = document.querySelector<HTMLInputElement>('[data-filter-search]');
+  const selects = [...document.querySelectorAll<HTMLSelectElement>('[data-filter]')];
+  const cards = [...document.querySelectorAll<HTMLElement>('[data-project-card]')];
+  const resultCount = document.querySelector<HTMLElement>('[data-result-count]');
+  const emptyState = document.querySelector<HTMLElement>('[data-empty-results]');
+  const resetButton = document.querySelector<HTMLButtonElement>('[data-reset-filters]');
+  const emptyReset = document.querySelector<HTMLButtonElement>('[data-empty-reset]');
+  const projectGrid = document.querySelector<HTMLElement>('[data-project-grid]');
+  const sortField = document.querySelector<HTMLSelectElement>('[data-sort-field]');
+  const sortDirection = document.querySelector<HTMLButtonElement>('[data-sort-direction]');
+  const unlockPanel = document.querySelector<HTMLElement>('[data-private-unlock-panel]');
+  const unlockButton = document.querySelector<HTMLButtonElement>('[data-private-unlock-button]');
+  const unlockStatus = document.querySelector<HTMLElement>('[data-private-unlock-status]');
+  let pendingPrivateUrl = '';
+  let unlockInProgress = false;
+  const compareText = (left: string, right: string) => left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
+
+  async function postAuth(path: string, body: unknown) {
+    const response = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const result = await response.json().catch(() => ({})) as Record<string, any>;
+    if (!response.ok) throw new Error(typeof result.error === 'string' ? result.error : 'Device unlock failed.');
+    return result;
+  }
+
+  function showUnlockPanel(targetUrl: string) {
+    pendingPrivateUrl = targetUrl;
+    if (unlockPanel) unlockPanel.hidden = false;
+    unlockPanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function unlockPrivateProject(targetUrl: string) {
+    if (unlockInProgress) return;
+    showUnlockPanel(targetUrl);
+    if (unlockStatus) unlockStatus.textContent = '';
+    unlockInProgress = true;
+    if (unlockButton) unlockButton.disabled = true;
+    try {
+      const status = await fetch('/api/local/device-auth/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      if (status.ok) {
+        window.location.assign(targetUrl);
+        return;
+      }
+      if (!browserSupportsWebAuthn()) throw new Error('Windows Hello is not available in this browser.');
+      if (unlockStatus) unlockStatus.textContent = 'Waiting for Windows Hello…';
+      const challenge = await postAuth('/api/local/device-auth/options', {});
+      const credential = challenge.mode === 'registration'
+        ? await startRegistration({ optionsJSON: challenge.options })
+        : await startAuthentication({ optionsJSON: challenge.options });
+      await postAuth('/api/local/device-auth/verify', {
+        ceremonyId: challenge.ceremonyId,
+        mode: challenge.mode,
+        response: credential,
+      });
+      if (unlockStatus) unlockStatus.textContent = 'Unlocked. Opening project…';
+      window.location.assign(targetUrl);
+    } catch (error) {
+      const cancelled = error instanceof DOMException && error.name === 'NotAllowedError';
+      if (unlockStatus) unlockStatus.textContent = cancelled
+        ? 'Windows Hello was cancelled. Select unlock to try again.'
+        : error instanceof Error ? error.message : 'Device unlock failed.';
+    } finally {
+      unlockInProgress = false;
+      if (unlockButton) unlockButton.disabled = false;
+    }
+  }
+
+  document.querySelectorAll<HTMLAnchorElement>('[data-private-project-link]').forEach((link) => {
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      void unlockPrivateProject(link.href);
+    });
+  });
+  unlockButton?.addEventListener('click', () => {
+    if (pendingPrivateUrl) void unlockPrivateProject(pendingPrivateUrl);
+  });
+
+  const requestedPrivateSlug = new URLSearchParams(window.location.search).get('unlock');
+  if (requestedPrivateSlug && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(requestedPrivateSlug)) {
+    showUnlockPanel(`/projects/${requestedPrivateSlug}`);
+    if (unlockStatus) unlockStatus.textContent = 'This project is locked. Select unlock to continue.';
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-project-carousel]').forEach((carousel) => {
+    const track = carousel.querySelector<HTMLElement>('[data-project-carousel-track]');
+    const slides = [...carousel.querySelectorAll<HTMLElement>('[data-project-carousel-slide]')];
+    const dots = [...carousel.querySelectorAll<HTMLButtonElement>('[data-project-carousel-dot]')];
+    let current = 0;
+    let touchStartX = 0;
+
+    const show = (next: number) => {
+      if (!track || slides.length === 0) return;
+      current = (next + slides.length) % slides.length;
+      track.style.transform = `translateX(-${current * 100}%)`;
+      slides.forEach((slide, index) => {
+        slide.setAttribute('aria-hidden', String(index !== current));
+        slide.setAttribute('tabindex', index === current ? '0' : '-1');
+      });
+      dots.forEach((dot, index) => {
+        dot.dataset.active = String(index === current);
+        if (index === current) dot.setAttribute('aria-current', 'true');
+        else dot.removeAttribute('aria-current');
+      });
+    };
+
+    carousel.querySelector<HTMLButtonElement>('[data-project-carousel-previous]')?.addEventListener('click', () => show(current - 1));
+    carousel.querySelector<HTMLButtonElement>('[data-project-carousel-next]')?.addEventListener('click', () => show(current + 1));
+    dots.forEach((dot, index) => dot.addEventListener('click', () => show(index)));
+    carousel.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowLeft') { event.preventDefault(); show(current - 1); }
+      if (event.key === 'ArrowRight') { event.preventDefault(); show(current + 1); }
+    });
+    carousel.addEventListener('touchstart', (event) => { touchStartX = event.changedTouches[0]?.clientX ?? 0; }, { passive: true });
+    carousel.addEventListener('touchend', (event) => {
+      const distance = (event.changedTouches[0]?.clientX ?? touchStartX) - touchStartX;
+      if (Math.abs(distance) > 40) show(current + (distance < 0 ? 1 : -1));
+    }, { passive: true });
+  });
+
+  function applySort() {
+    if (!projectGrid) return;
+    const field = sortField?.value ?? 'updated';
+    const direction = sortDirection?.dataset.direction === 'asc' ? 1 : -1;
+    [...cards].sort((left, right) => {
+      let comparison = field === 'id'
+        ? compareText(left.dataset.projectId ?? '', right.dataset.projectId ?? '')
+        : field === 'name'
+          ? compareText(left.dataset.projectName ?? '', right.dataset.projectName ?? '')
+          : Number(left.dataset.projectUpdated ?? 0) - Number(right.dataset.projectUpdated ?? 0);
+      if (comparison === 0) comparison = compareText(left.dataset.projectId ?? '', right.dataset.projectId ?? '');
+      return comparison * direction;
+    }).forEach((card) => projectGrid.append(card));
+  }
+
+  function applyFilters() {
+    const query = searchInput?.value.trim().toLowerCase() ?? '';
+    const activeFilters = Object.fromEntries(selects.map((select) => [select.dataset.filter ?? '', select.value]));
+    let visible = 0;
+    cards.forEach((card) => {
+      const matches = (!query || (card.dataset.search ?? '').includes(query))
+        && (!activeFilters.status || card.dataset.status === activeFilters.status)
+        && (!activeFilters.privacy || card.dataset.privacy === activeFilters.privacy);
+      card.hidden = !matches;
+      if (matches) visible += 1;
+    });
+    const hasFilters = Boolean(query || Object.values(activeFilters).some(Boolean));
+    if (resultCount) resultCount.textContent = String(visible);
+    if (emptyState) emptyState.hidden = visible !== 0;
+    if (resetButton) resetButton.hidden = !hasFilters;
+  }
+
+  function resetFilters() {
+    if (searchInput) searchInput.value = '';
+    selects.forEach((select) => (select.value = ''));
+    applyFilters();
+    searchInput?.focus();
+  }
+
+  searchInput?.addEventListener('input', applyFilters);
+  selects.forEach((select) => select.addEventListener('change', applyFilters));
+  sortField?.addEventListener('change', applySort);
+  sortDirection?.addEventListener('click', () => {
+    const nextDirection = sortDirection.dataset.direction === 'asc' ? 'desc' : 'asc';
+    sortDirection.dataset.direction = nextDirection;
+    const currentLabel = nextDirection === 'asc' ? 'Ascending' : 'Descending';
+    sortDirection.setAttribute('aria-label', `${currentLabel} order. Activate for ${nextDirection === 'asc' ? 'descending' : 'ascending'} order.`);
+    sortDirection.title = `${currentLabel} order`;
+    applySort();
+  });
+  resetButton?.addEventListener('click', resetFilters);
+  emptyReset?.addEventListener('click', resetFilters);
+  applySort();
+</script>

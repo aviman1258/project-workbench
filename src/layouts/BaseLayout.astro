@@ -1,0 +1,57 @@
+---
+import globalStyles from '../styles/global.css?url';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = "Avishek's Portfolio",
+  description = 'A private, local-first record of product ideas, experiments, and shipped work.',
+} = Astro.props;
+const pageTitle = title === "Avishek's Portfolio" ? title : `${title} · Avishek's Portfolio`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content={description} />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="/profile-avatar-circle.png?v=3" type="image/png" sizes="any" />
+    <link rel="shortcut icon" href="/profile-avatar-circle.png?v=3" type="image/png" />
+    <link rel="apple-touch-icon" href="/profile-avatar-circle.png?v=3" />
+    <link rel="stylesheet" href={globalStyles} />
+    <title>{pageTitle}</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-header__inner">
+        <a class="brand" href="/" aria-label="Avishek's Portfolio home">
+          <span class="brand__mark" aria-hidden="true">
+            <img src="/profile-avatar-circle.png" alt="" />
+          </span>
+          <span>
+            <strong>Avishek's Portfolio</strong>
+            <small>Local workspace</small>
+          </span>
+        </a>
+        <div class="site-actions">
+          <a class="site-action" href="/manage">+ Add project</a>
+          <div class="local-indicator" title="This portfolio is configured for local use only">
+            <span aria-hidden="true"></span>
+            Private · localhost
+          </div>
+        </div>
+      </div>
+    </header>
+    <main>
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <p>Markdown is the record. Git is the history. This interface is the view.</p>
+    </footer>
+  </body>
+</html>

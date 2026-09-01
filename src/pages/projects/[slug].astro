@@ -1,0 +1,442 @@
+---
+import { getCollection, type CollectionEntry } from 'astro:content';
+import StatusBadge from '../../components/StatusBadge.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { formatDate, formatLabel, loadArtifacts } from '../../lib/projects';
+import { privacyLevels, projectStatuses } from '../../lib/project-schema';
+
+export async function getStaticPaths() {
+  const projects = await getCollection('projects');
+  return projects.map((project) => ({ params: { slug: project.data.slug }, props: { project } }));
+}
+
+interface Props {
+  project: CollectionEntry<'projects'>;
+}
+
+const { project } = Astro.props;
+const { data } = project;
+const artifacts = await loadArtifacts(project);
+const privateProject = data.privacy === 'private';
+---
+
+<BaseLayout title={data.name} description={data.description}>
+  <div class="page-shell project-page">
+    <a class="back-link" href="/">← Portfolio index</a>
+
+    <header class="project-hero">
+      <div class="project-hero__main">
+        <div class="project-hero__topline"><span class="project-id">{data.id}</span><StatusBadge status={data.status} /></div>
+        <h1>{data.name}</h1>
+        <p>{data.description}</p>
+      </div>
+      <aside class={`confidentiality-card confidentiality-card--${data.privacy}`}>
+        <span class="confidentiality-card__icon" aria-hidden="true">◆</span>
+        <div><small>Privacy</small><strong>{formatLabel(data.privacy)}</strong><p>{data.privacy === 'private' ? 'Only for you.' : 'Ready to share.'}</p></div>
+      </aside>
+    </header>
+
+    <dl class="metadata-strip">
+      <div><dt>Status</dt><dd>{formatLabel(data.status)}</dd></div>
+      <div><dt>Started</dt><dd><time datetime={data.startDate.toISOString()}>{formatDate(data.startDate)}</time></dd></div>
+      <div><dt>Updated</dt><dd><time datetime={data.updatedDate.toISOString()}>{formatDate(data.updatedDate)}</time></dd></div>
+    </dl>
+
+    <nav class="section-nav" aria-label="Project sections"><a href="#overview">Overview</a><a href="#artifacts">Artifacts <span>{artifacts.length}</span></a></nav>
+
+    <section class="project-editor" aria-labelledby="project-editor-title">
+      <div class="project-editor__intro">
+        <div><p class="eyebrow">Local editor</p><h2 id="project-editor-title">Manage this project</h2></div>
+        <p>{privateProject ? 'Device unlock is required before editing this private project.' : "Changes are saved directly to this project's Markdown record."}</p>
+      </div>
+      <p class="project-editor__auth-status" data-project-auth-status aria-live="polite" hidden></p>
+      <div class="project-editor__tools">
+        <details class="project-edit-details" data-project-edit-details data-private={String(privateProject)}>
+          <summary data-protected-project-control={privateProject ? 'true' : undefined} data-unlocked-label="Edit project details">
+            {privateProject ? (
+              <svg class="project-control-lock" aria-hidden="true" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+            ) : <span aria-hidden="true">✦</span>}
+            <span data-protected-label>{privateProject ? 'Unlock project editor' : 'Edit project details'}</span>
+          </summary>
+          <form class="compact-form project-edit-form" data-project-edit-form data-project-slug={data.slug} novalidate>
+            <div class="compact-ai-fill" data-edit-ai-panel>
+              <div><strong>Update from a repository</strong><p>AI inspects the code and drafts changes. Nothing is saved until you press “Save changes.”</p></div>
+              <div class="compact-ai-fill__repository">
+                <label class="field"><span>Repository address</span><input type="url" data-edit-repository-url maxlength="500" inputmode="url" autocapitalize="none" autocomplete="off" placeholder="https://github.com/owner/repository" /></label>
+                <div class="compact-ai-fill__actions"><button type="button" data-edit-repository-mode="strict">Analyze exact facts</button><button type="button" data-edit-repository-mode="inferred">Analyze + infer why</button></div>
+                <div class="repository-auth" data-edit-repository-auth hidden></div>
+              </div>
+              <p class="ai-fill-result" data-edit-ai-result aria-live="polite"></p>
+            </div>
+
+            <label class="field"><span>Name</span><input name="name" value={data.name} required maxlength="120" /></label>
+            <label class="field"><span>Description</span><textarea name="description" required maxlength="500" rows="3">{data.description}</textarea></label>
+            <label class="field"><span>Why it was built</span><textarea name="why" required maxlength="3000" rows="8">{data.why}</textarea></label>
+            <div class="form-grid form-grid--two">
+              <label class="field"><span>Status</span><select name="status" required>{projectStatuses.map((value) => <option value={value} selected={value === data.status}>{formatLabel(value)}</option>)}</select></label>
+              <label class="field"><span>Privacy</span><select name="privacy" required>{privacyLevels.map((value) => <option value={value} selected={value === data.privacy}>{formatLabel(value)}</option>)}</select></label>
+              <label class="field"><span>Start date</span><input name="startDate" type="date" value={data.startDate.toISOString().slice(0, 10)} required /></label>
+            </div>
+            <div class="compact-form__actions"><p class="form-status" data-project-edit-status aria-live="assertive"></p><button class="primary-button" type="submit">Save changes</button></div>
+          </form>
+        </details>
+
+        <details>
+          <summary data-protected-project-control={privateProject ? 'true' : undefined} data-unlocked-label="Add artifact">
+            {privateProject ? (
+              <svg class="project-control-lock" aria-hidden="true" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+            ) : <span aria-hidden="true">＋</span>}
+            <span data-protected-label>{privateProject ? 'Unlock to add artifact' : 'Add artifact'}</span>
+          </summary>
+          <form class="compact-form" data-artifact-form data-project-slug={data.slug} novalidate>
+            <label class="file-drop field"><span>Artifact file</span><input name="artifact" type="file" accept=".png,.jpg,.jpeg,.pdf,.mp4" required /><small>PNG, JPG, PDF, or MP4 · up to 25 MB</small></label>
+            <div class="compact-form__actions"><p class="form-status" data-artifact-status aria-live="assertive"></p><button class="primary-button" type="submit">Save artifact</button></div>
+          </form>
+        </details>
+      </div>
+    </section>
+
+    <article class="case-study" id="overview">
+      <div class="section-kicker"><span>01</span> Overview</div>
+      <div class="section-heading section-heading--detail"><div><h2>Why it was built</h2></div></div>
+      <div class="prose"><p>{data.why}</p></div>
+    </article>
+
+    <section class="artifacts-section" id="artifacts">
+      <div class="section-kicker"><span>02</span> Supporting artifacts</div>
+      <div class="section-heading section-heading--detail"><div><h2>Evidence from the work</h2><p>Images, documents, and recordings stored alongside this project.</p></div></div>
+      {artifacts.length > 0 ? (
+        <div class="artifact-carousel" data-artifact-carousel tabindex={artifacts.length > 1 ? '0' : undefined} aria-label="Project artifacts carousel">
+          <div class="artifact-carousel__viewport" data-carousel-viewport>
+            <div class="artifact-carousel__track" data-carousel-track>
+              {artifacts.map((artifact, index) => (
+                <figure class="artifact-slide" data-carousel-slide aria-hidden={index === 0 ? 'false' : 'true'}>
+                  <a class="artifact-slide__media" href={artifact.href} target="_blank" rel="noreferrer" aria-label={`Open ${artifact.filename}`}>
+                    {artifact.kind === 'image' ? (
+                      <img src={artifact.href} alt={`Preview of ${artifact.filename}`} loading={index === 0 ? 'eager' : 'lazy'} />
+                    ) : artifact.kind === 'video' ? (
+                      <video src={artifact.href} muted playsinline preload="metadata"></video>
+                    ) : (
+                      <div class="artifact-slide__document"><span aria-hidden="true">▤</span><strong>{artifact.kind.toUpperCase()}</strong><small>Open to preview</small></div>
+                    )}
+                  </a>
+                  <figcaption>
+                    <div><strong>{artifact.filename}</strong><span>{formatLabel(artifact.kind)}</span></div>
+                    <a href={artifact.href} target="_blank" rel="noreferrer">Open original ↗</a>
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          </div>
+
+          {privateProject && (
+            <span class="artifact-privacy-lock artifact-privacy-lock--detail" aria-label="Private project">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+            </span>
+          )}
+
+          {artifacts.length > 1 && (
+            <div class="artifact-carousel__footer">
+              <p aria-live="polite"><strong data-carousel-current>1</strong> / {artifacts.length}</p>
+              <div class="artifact-carousel__controls">
+                <button type="button" data-carousel-previous aria-label="Show previous artifact"><span aria-hidden="true">←</span></button>
+                <button type="button" data-carousel-next aria-label="Show next artifact"><span aria-hidden="true">→</span></button>
+              </div>
+            </div>
+          )}
+
+          {artifacts.length > 1 && (
+            <div class="artifact-carousel__thumbnails" aria-label="Choose an artifact">
+              {artifacts.map((artifact, index) => (
+                <button type="button" data-carousel-thumbnail data-active={index === 0 ? 'true' : 'false'} aria-label={`Show ${artifact.filename}`} aria-current={index === 0 ? 'true' : undefined}>
+                  {artifact.kind === 'image' ? <img src={artifact.href} alt="" loading="lazy" /> : <span>{artifact.kind.toUpperCase()}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div class="artifact-empty"><span aria-hidden="true">□</span><div><h3>No artifacts attached yet</h3><p>Use “Add artifact” above when you have something worth keeping.</p></div></div>
+      )}
+    </section>
+  </div>
+</BaseLayout>
+
+<script>
+  import {
+    browserSupportsWebAuthn,
+    startAuthentication,
+    startRegistration,
+  } from '@simplewebauthn/browser';
+
+  type FormError = Error & { field?: string; authRequired?: boolean; authProvider?: string; status?: number };
+
+  document.querySelectorAll<HTMLElement>('[data-artifact-carousel]').forEach((carousel) => {
+    const track = carousel.querySelector<HTMLElement>('[data-carousel-track]');
+    const slides = [...carousel.querySelectorAll<HTMLElement>('[data-carousel-slide]')];
+    const thumbnails = [...carousel.querySelectorAll<HTMLButtonElement>('[data-carousel-thumbnail]')];
+    const currentLabel = carousel.querySelector<HTMLElement>('[data-carousel-current]');
+    let current = 0;
+    let touchStartX = 0;
+
+    const show = (next: number) => {
+      if (!track || slides.length === 0) return;
+      current = (next + slides.length) % slides.length;
+      track.style.transform = `translateX(-${current * 100}%)`;
+      slides.forEach((slide, index) => slide.setAttribute('aria-hidden', String(index !== current)));
+      thumbnails.forEach((thumbnail, index) => {
+        thumbnail.dataset.active = String(index === current);
+        if (index === current) thumbnail.setAttribute('aria-current', 'true');
+        else thumbnail.removeAttribute('aria-current');
+      });
+      if (currentLabel) currentLabel.textContent = String(current + 1);
+    };
+
+    carousel.querySelector<HTMLButtonElement>('[data-carousel-previous]')?.addEventListener('click', () => show(current - 1));
+    carousel.querySelector<HTMLButtonElement>('[data-carousel-next]')?.addEventListener('click', () => show(current + 1));
+    thumbnails.forEach((thumbnail, index) => thumbnail.addEventListener('click', () => show(index)));
+    carousel.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowLeft') { event.preventDefault(); show(current - 1); }
+      if (event.key === 'ArrowRight') { event.preventDefault(); show(current + 1); }
+    });
+    carousel.addEventListener('touchstart', (event) => { touchStartX = event.changedTouches[0]?.clientX ?? 0; }, { passive: true });
+    carousel.addEventListener('touchend', (event) => {
+      const distance = (event.changedTouches[0]?.clientX ?? touchStartX) - touchStartX;
+      if (Math.abs(distance) > 45) show(current + (distance < 0 ? 1 : -1));
+    }, { passive: true });
+  });
+
+  const setBusy = (form: HTMLFormElement, busy: boolean) => {
+    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (button) button.disabled = busy;
+  };
+
+  const clearFieldErrors = (form: HTMLFormElement) => {
+    form.querySelectorAll<HTMLElement>('.field--invalid').forEach((field) => field.classList.remove('field--invalid'));
+    form.querySelectorAll<HTMLElement>('[aria-invalid="true"]').forEach((control) => control.removeAttribute('aria-invalid'));
+    form.querySelectorAll<HTMLElement>('[data-field-error]').forEach((message) => message.remove());
+    form.querySelector<HTMLElement>('.form-status')?.classList.remove('form-status--error');
+  };
+
+  const showError = (form: HTMLFormElement, status: HTMLElement | null, message: string, fieldName?: string) => {
+    clearFieldErrors(form);
+    if (status) { status.classList.add('form-status--error'); status.textContent = message; }
+    if (!fieldName) return;
+    const control = form.elements.namedItem(fieldName);
+    if (!(control instanceof HTMLElement)) return;
+    const field = control.closest<HTMLElement>('.field');
+    if (!field) return;
+    field.classList.add('field--invalid');
+    control.setAttribute('aria-invalid', 'true');
+    const note = document.createElement('p');
+    note.className = 'field-error';
+    note.dataset.fieldError = '';
+    note.textContent = message;
+    field.append(note);
+    control.focus();
+  };
+
+  const firstInvalid = (form: HTMLFormElement) => [...form.elements].find(
+    (control): control is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement =>
+      (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) && !control.validity.valid,
+  );
+
+  let editUnlockToken = '';
+
+  const postJson = async (url: string, payload: unknown) => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (editUnlockToken) headers['X-Portfolio-Unlock'] = editUnlockToken;
+    const response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
+    const result = await response.json();
+    if (!response.ok) {
+      const error = Object.assign(new Error(result.error ?? 'The file could not be saved.'), result) as FormError;
+      error.status = response.status;
+      throw error;
+    }
+    return result;
+  };
+
+  const protectedControls = [...document.querySelectorAll<HTMLElement>('[data-protected-project-control="true"]')];
+  const projectAuthStatus = document.querySelector<HTMLElement>('[data-project-auth-status]');
+  let unlockBusy = false;
+
+  const showProjectAuthStatus = (message: string, error = false) => {
+    if (!projectAuthStatus) return;
+    projectAuthStatus.hidden = false;
+    projectAuthStatus.classList.toggle('project-editor__auth-status--error', error);
+    projectAuthStatus.textContent = message;
+  };
+
+  protectedControls.forEach((control) => {
+    control.addEventListener('click', async (event) => {
+      if (editUnlockToken) return;
+      event.preventDefault();
+      if (unlockBusy) return;
+      unlockBusy = true;
+      const label = control.querySelector<HTMLElement>('[data-protected-label]');
+      if (label) label.textContent = 'Waiting for device unlock…';
+      showProjectAuthStatus('Use your device’s face, fingerprint, PIN, or password to continue.');
+
+      try {
+        if (!window.isSecureContext || !browserSupportsWebAuthn()) {
+          throw new Error('Device unlock requires HTTPS (or localhost) and a browser that supports passkeys.');
+        }
+        const optionsResult = await postJson('/api/local/device-auth/options', {});
+        const passkeyResponse = optionsResult.mode === 'registration'
+          ? await startRegistration({ optionsJSON: optionsResult.options })
+          : await startAuthentication({ optionsJSON: optionsResult.options });
+        const verification = await postJson('/api/local/device-auth/verify', {
+          ceremonyId: optionsResult.ceremonyId,
+          mode: optionsResult.mode,
+          response: passkeyResponse,
+        });
+        if (!verification.verified || !verification.token) throw new Error('The device could not verify your identity.');
+        editUnlockToken = String(verification.token);
+        protectedControls.forEach((item) => {
+          const itemLabel = item.querySelector<HTMLElement>('[data-protected-label]');
+          if (itemLabel) itemLabel.textContent = item.dataset.unlockedLabel ?? 'Edit project';
+        });
+        showProjectAuthStatus('Unlocked on this page for 10 minutes.');
+        const details = control.closest<HTMLDetailsElement>('details');
+        if (details) details.open = true;
+      } catch (error) {
+        if (label) label.textContent = control.dataset.unlockedLabel === 'Add artifact' ? 'Unlock to add artifact' : 'Unlock project editor';
+        showProjectAuthStatus(error instanceof Error ? error.message : 'Device unlock was canceled or unavailable.', true);
+      } finally {
+        unlockBusy = false;
+      }
+    });
+  });
+
+  const editForm = document.querySelector<HTMLFormElement>('[data-project-edit-form]');
+  const aiResult = document.querySelector<HTMLElement>('[data-edit-ai-result]');
+  const repositoryUrl = document.querySelector<HTMLInputElement>('[data-edit-repository-url]');
+  const repositoryButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-edit-repository-mode]')];
+  const repositoryAuth = document.querySelector<HTMLElement>('[data-edit-repository-auth]');
+
+  const applyDraft = (draft: Record<string, unknown>) => {
+    if (!editForm) return 0;
+    let changed = 0;
+    for (const name of ['name', 'description', 'why', 'status', 'privacy', 'startDate'] as const) {
+      const value = String(draft[name] ?? '');
+      const control = editForm.elements.namedItem(name);
+      if (!value || !(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement)) continue;
+      if (control instanceof HTMLSelectElement && ![...control.options].some((option) => option.value === value)) continue;
+      control.value = value;
+      changed += 1;
+    }
+    return changed;
+  };
+
+  const showAuthentication = (provider: 'github' | 'azure', retry: () => void) => {
+    if (!repositoryAuth) return;
+    repositoryAuth.hidden = false;
+    repositoryAuth.replaceChildren();
+    const message = document.createElement('p');
+    message.textContent = `This private repository needs access through ${provider === 'azure' ? 'your Microsoft work account' : 'GitHub'}.`;
+    const signIn = document.createElement('button');
+    signIn.type = 'button';
+    signIn.textContent = provider === 'azure' ? 'Sign in with Microsoft' : 'Sign in with GitHub';
+    repositoryAuth.append(message, signIn);
+    signIn.addEventListener('click', async () => {
+      signIn.disabled = true;
+      signIn.textContent = 'Starting secure sign-in…';
+      try {
+        const result = await postJson('/api/local/repository-auth', { provider, repositoryUrl: repositoryUrl?.value ?? '' });
+        repositoryAuth.replaceChildren();
+        const instructions = document.createElement('p');
+        instructions.textContent = result.userCode ? 'Enter this one-time code in the sign-in page, approve access, then retry.' : 'Access is ready. Retry the repository analysis.';
+        repositoryAuth.append(instructions);
+        if (result.userCode) {
+          const code = document.createElement('code'); code.textContent = String(result.userCode);
+          const link = document.createElement('a'); link.href = String(result.verificationUrl ?? 'https://github.com/login/device'); link.target = '_blank'; link.rel = 'noreferrer'; link.textContent = 'Open sign-in ↗';
+          repositoryAuth.append(code, link);
+        }
+        const retryButton = document.createElement('button'); retryButton.type = 'button'; retryButton.textContent = 'I approved it — retry'; retryButton.addEventListener('click', retry); repositoryAuth.append(retryButton);
+      } catch (error) {
+        repositoryAuth.classList.add('repository-auth--error');
+        repositoryAuth.textContent = error instanceof Error ? error.message : 'Repository sign-in could not start.';
+      }
+    });
+  };
+
+  const analyzeRepository = async (mode: 'strict' | 'inferred') => {
+    if (!editForm || !aiResult || !repositoryUrl) return;
+    const address = repositoryUrl.value.trim();
+    if (!address) { aiResult.className = 'ai-fill-result ai-fill-result--error'; aiResult.textContent = 'Enter the repository’s main address first.'; repositoryUrl.focus(); return; }
+    const name = (editForm.elements.namedItem('name') as HTMLInputElement).value;
+    const description = (editForm.elements.namedItem('description') as HTMLTextAreaElement).value;
+    repositoryButtons.forEach((button) => (button.disabled = true));
+    aiResult.className = 'ai-fill-result ai-fill-result--working';
+    aiResult.textContent = 'Reading the commit history, inspecting the code, and drafting this edit…';
+    try {
+      const result = await postJson('/api/local/repository-fill', { mode, repositoryUrl: address, current: { name, description } });
+      const changed = applyDraft(result.draft ?? {});
+      aiResult.className = 'ai-fill-result ai-fill-result--success';
+      aiResult.textContent = `${changed ? `Drafted ${changed} ${changed === 1 ? 'field' : 'fields'}` : 'No supported changes were found'} from the repository. Review, then save.`;
+      if (repositoryAuth) repositoryAuth.hidden = true;
+    } catch (error) {
+      const problem = error as FormError;
+      aiResult.className = 'ai-fill-result ai-fill-result--error';
+      aiResult.textContent = problem.message || 'The repository could not be analyzed.';
+      if (problem.authRequired) showAuthentication(problem.authProvider === 'azure' ? 'azure' : 'github', () => void analyzeRepository(mode));
+    } finally {
+      repositoryButtons.forEach((button) => (button.disabled = false));
+    }
+  };
+
+  repositoryButtons.forEach((button) => button.addEventListener('click', () => {
+    const mode = button.dataset.editRepositoryMode;
+    if (mode === 'strict' || mode === 'inferred') void analyzeRepository(mode);
+  }));
+
+  editForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const status = editForm.querySelector<HTMLElement>('[data-project-edit-status]');
+    clearFieldErrors(editForm);
+    const invalid = firstInvalid(editForm);
+    if (invalid) { showError(editForm, status, invalid.validationMessage || 'This field needs your attention.', invalid.name); return; }
+    const formData = new FormData(editForm);
+    setBusy(editForm, true);
+    if (status) status.textContent = 'Saving the project changes…';
+    try {
+      await postJson(`/api/local/projects/${encodeURIComponent(editForm.dataset.projectSlug ?? '')}`, {
+        name: String(formData.get('name') ?? ''), description: String(formData.get('description') ?? ''), why: String(formData.get('why') ?? ''), status: String(formData.get('status') ?? ''), privacy: String(formData.get('privacy') ?? ''), startDate: String(formData.get('startDate') ?? ''),
+      });
+      if (status) status.textContent = 'Saved. Refreshing the project…';
+      window.setTimeout(() => window.location.reload(), 400);
+    } catch (error) {
+      const problem = error as FormError;
+      if (problem.status === 401) editUnlockToken = '';
+      showError(editForm, status, problem.message || 'The project could not be updated.', problem.field);
+      setBusy(editForm, false);
+    }
+  });
+
+  const artifactForm = document.querySelector<HTMLFormElement>('[data-artifact-form]');
+  artifactForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const status = artifactForm.querySelector<HTMLElement>('[data-artifact-status]');
+    clearFieldErrors(artifactForm);
+    const invalid = firstInvalid(artifactForm);
+    if (invalid) { showError(artifactForm, status, invalid.validationMessage || 'Choose an artifact file.', invalid.name); return; }
+    const file = (artifactForm.elements.namedItem('artifact') as HTMLInputElement | null)?.files?.[0];
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) { showError(artifactForm, status, 'Choose a file that is 25 MB or smaller.', 'artifact'); return; }
+    setBusy(artifactForm, true);
+    if (status) status.textContent = 'Saving the artifact…';
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader(); reader.addEventListener('load', () => resolve(String(reader.result))); reader.addEventListener('error', () => reject(new Error('The selected file could not be read.'))); reader.readAsDataURL(file);
+      });
+      await postJson(`/api/local/projects/${encodeURIComponent(artifactForm.dataset.projectSlug ?? '')}/artifacts`, { filename: file.name, data: dataUrl.slice(dataUrl.indexOf(',') + 1) });
+      if (status) status.textContent = 'Saved. Refreshing the artifacts…';
+      window.setTimeout(() => window.location.reload(), 400);
+    } catch (error) {
+      const problem = error as FormError;
+      if (problem.status === 401) editUnlockToken = '';
+      showError(artifactForm, status, problem.message || 'The artifact could not be saved.', problem.field);
+      setBusy(artifactForm, false);
+    }
+  });
+</script>

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "why": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["", "idea", "dev", "review", "delivered"]
+    },
+    "privacy": {
+      "type": "string",
+      "enum": ["", "private", "public"]
+    }
+  },
+  "required": ["name", "description", "why", "status", "privacy"]
+}
