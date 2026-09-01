@@ -43,6 +43,10 @@ const avatar = withBase('/profile-avatar-circle.png');
           </span>
         </a>
         <div class="site-actions">
+          <button type="button" class="site-action site-action--share" data-share-open>
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"></path></svg>
+            Share
+          </button>
           <a class="site-action" href={withBase('/manage')}>+ Add project</a>
           {!publicOnlyBuild && (
             <div class="local-indicator" title="This portfolio is configured for local use only">
@@ -59,5 +63,59 @@ const avatar = withBase('/profile-avatar-circle.png');
     <footer class="site-footer">
       <p>Markdown is the record. Git is the history. This interface is the view.</p>
     </footer>
+
+    <dialog class="share-dialog" data-share-dialog>
+      <h3>Scan to open</h3>
+      <canvas data-share-canvas></canvas>
+      <p class="share-dialog__url" data-share-url></p>
+      <div class="share-dialog__actions">
+        <button type="button" class="share-dialog__native" data-share-native hidden>More sharing options…</button>
+        <button type="button" class="share-dialog__close" data-share-close>Close</button>
+      </div>
+    </dialog>
+
+    <script>
+      import QRCode from 'qrcode';
+
+      // The QR always points at the hosted site, even from local dev —
+      // sharing a localhost address helps nobody.
+      const SHARE_ORIGIN = 'https://aviman1258.github.io/project-workbench';
+
+      const dialog = document.querySelector<HTMLDialogElement>('[data-share-dialog]');
+      const canvas = document.querySelector<HTMLCanvasElement>('[data-share-canvas]');
+      const urlLabel = document.querySelector<HTMLElement>('[data-share-url]');
+      const nativeButton = document.querySelector<HTMLButtonElement>('[data-share-native]');
+
+      const shareUrl = () => {
+        const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+        const path = window.location.pathname.startsWith(base)
+          ? window.location.pathname.slice(base.length)
+          : window.location.pathname;
+        return `${SHARE_ORIGIN}${path === '/' ? '' : path}`;
+      };
+
+      document.querySelector('[data-share-open]')?.addEventListener('click', async () => {
+        if (!dialog || !canvas) return;
+        const url = shareUrl();
+        const size = Math.min(Math.floor(window.innerWidth * 0.78), 440);
+        await QRCode.toCanvas(canvas, url, {
+          width: size,
+          margin: 2,
+          errorCorrectionLevel: 'M',
+          color: { dark: '#17231e', light: '#ffffff' },
+        });
+        if (urlLabel) urlLabel.textContent = url;
+        if (nativeButton) nativeButton.hidden = !navigator.share;
+        dialog.showModal();
+      });
+
+      nativeButton?.addEventListener('click', () => {
+        void navigator.share({ title: "Avishek's Project Workbench", url: shareUrl() }).catch(() => {});
+      });
+      document.querySelector('[data-share-close]')?.addEventListener('click', () => dialog?.close());
+      dialog?.addEventListener('click', (event) => {
+        if (event.target === dialog) dialog.close();
+      });
+    </script>
   </body>
 </html>

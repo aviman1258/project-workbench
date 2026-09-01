@@ -17,11 +17,13 @@
     "@simplewebauthn/server": "^13.3.3",
     "astro": "7.2.9",
     "pdfjs-dist": "^6.3.289",
+    "qrcode": "^1.5.4",
     "yaml": "2.9.0"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.10",
     "@types/node": "^26.4.0",
+    "@types/qrcode": "^1.5.6",
     "typescript": "6.0.3",
     "vite": "^8.2.2"
   }

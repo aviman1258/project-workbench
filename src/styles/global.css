@@ -1561,6 +1561,77 @@ a {
   pointer-events: none;
 }
 
+.site-action--share {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.site-action--share svg {
+  width: 14px;
+  height: 14px;
+}
+
+.share-dialog {
+  max-width: min(92vw, 520px);
+  padding: 28px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-strong);
+  color: var(--ink);
+  text-align: center;
+}
+
+.share-dialog::backdrop {
+  background: rgb(23 35 30 / 55%);
+}
+
+.share-dialog h3 {
+  margin: 0 0 18px;
+  font: 500 1.5rem/1.2 var(--serif);
+}
+
+.share-dialog canvas {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+
+.share-dialog__url {
+  margin: 14px 0 20px;
+  color: var(--ink-soft);
+  font: 12px/1.5 var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.share-dialog__actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.share-dialog__actions button {
+  border-radius: 999px;
+  font: 600 13px/1 var(--sans);
+  padding: 11px 20px;
+  cursor: pointer;
+}
+
+.share-dialog__native {
+  border: 1px solid var(--forest);
+  background: var(--forest);
+  color: #fff;
+}
+
+.share-dialog__close {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+}
+
 .vault-content {
   padding: 26px 18px 10px;
 }
