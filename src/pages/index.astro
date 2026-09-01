@@ -2,11 +2,7 @@
 import { getCollection } from 'astro:content';
 import ProjectCard from '../components/ProjectCard.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { formatLabel } from '../lib/projects';
-
 const projects = (await getCollection('projects')).sort((a, b) => b.data.updatedDate.getTime() - a.data.updatedDate.getTime());
-const statuses = [...new Set(projects.map((project) => project.data.status))].sort();
-const privacyLevels = [...new Set(projects.map((project) => project.data.privacy))].sort();
 const stats = [
   { label: 'Ideas', value: projects.filter((project) => project.data.status === 'idea').length },
   { label: 'In development', value: projects.filter((project) => project.data.status === 'dev').length },
@@ -32,7 +28,6 @@ const stats = [
     <section class="work-section" aria-labelledby="work-heading">
       <div class="section-heading">
         <div><p class="eyebrow">Portfolio index</p><h2 id="work-heading">Projects</h2></div>
-        <p class="result-count" aria-live="polite"><strong data-result-count>{projects.length}</strong> visible</p>
       </div>
 
       <div class="filter-panel" aria-label="Filter projects">
@@ -45,10 +40,6 @@ const stats = [
             <label><span>Sort by</span><select data-sort-field><option value="updated">Updated date</option><option value="id">ID</option><option value="name">Alphabetical</option></select></label>
             <button class="sort-direction-button" type="button" data-sort-direction data-direction="desc" aria-label="Descending order. Activate for ascending order." title="Descending order"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v16m-5-5 5 5 5-5" /></svg></button>
           </div>
-        </div>
-        <div class="select-filters">
-          <label><span>Status</span><select data-filter="status"><option value="">All statuses</option>{statuses.map((status) => <option value={status}>{formatLabel(status)}</option>)}</select></label>
-          <label><span>Privacy</span><select data-filter="privacy"><option value="">All privacy levels</option>{privacyLevels.map((privacy) => <option value={privacy}>{formatLabel(privacy)}</option>)}</select></label>
         </div>
         <button class="reset-filters" type="button" data-reset-filters hidden>Clear filters</button>
       </div>
