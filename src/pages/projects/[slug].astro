@@ -113,7 +113,7 @@ const privateProject = data.privacy === 'private';
                     ) : artifact.kind === 'video' ? (
                       <video src={artifact.href} muted playsinline preload="metadata"></video>
                     ) : (
-                      <div class="artifact-slide__document"><span aria-hidden="true">▤</span><strong>{artifact.kind.toUpperCase()}</strong><small>Open to preview</small></div>
+                      <div class="artifact-slide__document" data-pdf-preview={artifact.kind === 'pdf' ? artifact.href : undefined}><span aria-hidden="true">▤</span><strong>{artifact.kind.toUpperCase()}</strong><small>Open to preview</small></div>
                     )}
                   </a>
                   <figcaption>
@@ -144,7 +144,7 @@ const privateProject = data.privacy === 'private';
           <div class="artifact-carousel__thumbnails" data-media-tiles aria-label="Choose an artifact, or drag a tile to reorder">
             {artifacts.map((artifact, index) => (
               <button type="button" data-carousel-thumbnail data-media-tile data-filename={artifact.filename} data-active={index === 0 ? 'true' : 'false'} aria-label={`Show ${artifact.filename}`} aria-current={index === 0 ? 'true' : undefined}>
-                {artifact.kind === 'image' ? <img src={artifact.href} alt="" loading="lazy" draggable="false" /> : <span>{artifact.kind.toUpperCase()}</span>}
+                {artifact.kind === 'image' ? <img src={artifact.href} alt="" loading="lazy" draggable="false" /> : <span data-pdf-preview={artifact.kind === 'pdf' ? artifact.href : undefined}>{artifact.kind.toUpperCase()}</span>}
               </button>
             ))}
           </div>
@@ -210,6 +210,52 @@ const privateProject = data.privacy === 'private';
   const rememberScroll = () => {
     try { window.sessionStorage.setItem('media-op-return', 'tiles'); } catch { /* ignore */ }
   };
+
+  // Render the first page of each PDF artifact as its preview (carousel slide and
+  // thumbnail tile). The generic "PDF / Open to preview" card stays as the fallback.
+  void (async () => {
+    const targets = [...document.querySelectorAll<HTMLElement>('[data-pdf-preview]')];
+    if (!targets.length) return;
+    try {
+      const pdfjs = await import('pdfjs-dist');
+      const worker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
+      pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+      const rendered = new Map<string, string>();
+
+      for (const target of targets) {
+        const href = target.dataset.pdfPreview ?? '';
+        try {
+          let dataUrl = rendered.get(href);
+          if (!dataUrl) {
+            const doc = await pdfjs.getDocument({ url: new URL(href, window.location.origin).toString() }).promise;
+            const page = await doc.getPage(1);
+            const base = page.getViewport({ scale: 1 });
+            // render wide enough for the big slide; tiles reuse the same bitmap
+            const scale = Math.min(1200 / base.width, 4);
+            const viewport = page.getViewport({ scale });
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.ceil(viewport.width);
+            canvas.height = Math.ceil(viewport.height);
+            const context = canvas.getContext('2d');
+            if (!context) continue;
+            await page.render({ canvasContext: context, viewport }).promise;
+            dataUrl = canvas.toDataURL('image/png');
+            rendered.set(href, dataUrl);
+          }
+          const img = document.createElement('img');
+          img.src = dataUrl;
+          img.alt = 'First page of the PDF';
+          img.draggable = false;
+          target.replaceChildren(img);
+          target.classList.add('pdf-preview--ready');
+        } catch (error) {
+          console.error('[pdf-preview] could not render', href, error);
+        }
+      }
+    } catch (error) {
+      console.error('[pdf-preview] pdf.js failed to load', error);
+    }
+  })();
 
   document.querySelectorAll<HTMLElement>('[data-artifact-carousel]').forEach((carousel) => {
     const track = carousel.querySelector<HTMLElement>('[data-carousel-track]');

@@ -16,6 +16,7 @@
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.3",
     "astro": "7.2.9",
+    "pdfjs-dist": "^6.3.289",
     "yaml": "2.9.0"
   },
   "devDependencies": {
