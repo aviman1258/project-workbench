@@ -10,3 +10,4 @@ dist/
 # Private projects stay local-only; the public repo and hosted site never see them
 src/content/projects/001-qa-listing-search/
 src/content/projects/002-filming-nightlife/
+src/content/projects/*-private-stub/
