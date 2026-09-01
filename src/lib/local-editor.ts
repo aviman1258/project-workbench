@@ -289,6 +289,18 @@ export function localEditorPlugin(projectsRoot = defaultProjectsRoot): Plugin {
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use(async (request, response, next) => {
+        // WebAuthn requires a domain name as the relying-party ID, so device unlock
+        // breaks when the app is opened via an IP literal. Redirect to localhost.
+        const hostHeader = request.headers.host ?? '';
+        const hostMatch = /^(127\.0\.0\.1|\[::1\])(:\d+)?$/.exec(hostHeader);
+        if (hostMatch) {
+          response.statusCode = 307;
+          response.setHeader('Location', `http://localhost${hostMatch[2] ?? ''}${request.url ?? '/'}`);
+          response.setHeader('Cache-Control', 'no-store');
+          response.end();
+          return;
+        }
+
         const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
         const projectPageMatch = /^\/projects\/([^/]+)\/?$/.exec(pathname);
         if (projectPageMatch && (request.method === 'GET' || request.method === 'HEAD')) {
