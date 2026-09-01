@@ -392,6 +392,111 @@ async function runCodex(prompt: string): Promise<FillResult> {
   }
 }
 
+async function runClaude(prompt: string): Promise<FillResult> {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'portfolio-ai-fill-'));
+  // Claude Code's schema validator rejects the $schema meta-schema key, so drop it.
+  const { $schema: _dropped, ...schema } = JSON.parse(
+    await readFile(path.resolve('src/lib/ai-fill-output.schema.json'), 'utf8'),
+  ) as Record<string, unknown>;
+  const schemaJson = JSON.stringify(schema);
+  const executable = process.env.CLAUDE_EXECUTABLE || 'claude';
+
+  try {
+    const args = [
+      '-p',
+      '--output-format', 'json',
+      '--json-schema', schemaJson,
+      '--tools', '',
+      '--strict-mcp-config',
+      '--no-session-persistence',
+      '--model', 'sonnet',
+      '--max-budget-usd', '1',
+    ];
+
+    const stdout = await new Promise<string>((resolve, reject) => {
+      const child = spawn(executable, args, {
+        cwd: temporaryRoot,
+        env: { ...process.env },
+        windowsHide: true,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      let output = '';
+      let stderr = '';
+      const timer = setTimeout(() => {
+        child.kill();
+        reject(new AiFillError('The AI fill took too long. Please try again.', 504));
+      }, 180_000);
+
+      child.stdout.on('data', (chunk: Buffer) => {
+        output += chunk.toString('utf8');
+      });
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderr = `${stderr}${chunk.toString('utf8')}`.slice(-8_000);
+      });
+      child.once('error', (error: NodeJS.ErrnoException) => {
+        clearTimeout(timer);
+        reject(
+          error.code === 'ENOENT'
+            ? new AiFillError('Neither Codex nor Claude Code is available on the command line. Install one and restart the dev server.', 503)
+            : error,
+        );
+      });
+      child.once('exit', (code) => {
+        clearTimeout(timer);
+        if (code === 0) resolve(output);
+        else reject(new AiFillError(`Claude Code could not complete the draft.${stderr ? ` ${stderr.trim().split('\n').at(-1)}` : ''}`, 502));
+      });
+      child.stdin.end(prompt);
+    });
+
+    let envelope: Record<string, unknown>;
+    try {
+      envelope = JSON.parse(stdout) as Record<string, unknown>;
+    } catch {
+      throw new AiFillError('Claude Code returned a draft in an unexpected format. Please try again.', 502);
+    }
+    if (envelope.is_error || envelope.subtype !== 'success') {
+      throw new AiFillError(`Claude Code could not complete the draft. ${String(envelope.result ?? envelope.subtype ?? '')}`.trim(), 502);
+    }
+    let raw: unknown = envelope.structured_output;
+    if (!raw || typeof raw !== 'object') {
+      try {
+        raw = JSON.parse(String(envelope.result ?? ''));
+      } catch {
+        raw = null;
+      }
+    }
+    const parsed = resultSchema.safeParse(raw);
+    if (!parsed.success) throw new AiFillError('Claude Code returned a draft in an unexpected format. Please try again.', 502);
+    return parsed.data;
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
+// Prefer Codex when it is installed (AI_FILL_ENGINE overrides); otherwise fall back
+// to Claude Code so the fill works on machines without a Codex login.
+let detectedEngine: 'codex' | 'claude' | null = null;
+
+async function runDraftModel(prompt: string): Promise<FillResult> {
+  const forced = (process.env.AI_FILL_ENGINE || '').toLowerCase();
+  if (forced === 'claude') return runClaude(prompt);
+  if (forced === 'codex') return runCodex(prompt);
+  if (detectedEngine === 'claude') return runClaude(prompt);
+  try {
+    const result = await runCodex(prompt);
+    detectedEngine = 'codex';
+    return result;
+  } catch (error) {
+    if (error instanceof AiFillError && error.status === 503) {
+      const result = await runClaude(prompt);
+      detectedEngine = 'claude';
+      return result;
+    }
+    throw error;
+  }
+}
+
 let activeRequest = false;
 
 export async function fillProjectFromRepository(rawInput: unknown) {
@@ -434,7 +539,7 @@ export async function fillProjectFromRepository(rawInput: unknown) {
     }
     const commitDates = await findCommitDates(repositoryRoot);
     const evidence = await collectRepositoryEvidence(repositoryRoot, repository.label);
-    const draft = await runCodex(makeRepositoryPrompt(input.data.mode, input.data.current, evidence));
+    const draft = await runDraftModel(makeRepositoryPrompt(input.data.mode, input.data.current, evidence));
     return {
       draft: {
         ...draft,
