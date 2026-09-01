@@ -18,7 +18,7 @@ const today = new Date().toISOString().slice(0, 10);
       </div>
       <aside class="editor-note">
         <span aria-hidden="true">●</span>
-        <p><strong>Writes to your project folder</strong><br />Available while <code>npm run dev</code> is running.</p>
+        <p><strong>Writes to your project folder</strong><br />Available while <code>npm run dev</code> is running. Creating asks for your device unlock.</p>
       </aside>
     </header>
 
@@ -111,7 +111,49 @@ const today = new Date().toISOString().slice(0, 10);
 </BaseLayout>
 
 <script>
+  import {
+    browserSupportsWebAuthn,
+    startAuthentication,
+    startRegistration,
+  } from '@simplewebauthn/browser';
+
   type RepositoryError = Error & { field?: string; authRequired?: boolean; authProvider?: string };
+
+  let unlockToken = '';
+
+  const postAuth = async (url: string, payload: unknown) => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (unlockToken) headers['X-Portfolio-Unlock'] = unlockToken;
+    const response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
+    const result = await response.json().catch(() => ({})) as Record<string, any>;
+    if (!response.ok) throw new Error(typeof result.error === 'string' ? result.error : 'Device unlock failed.');
+    return result;
+  };
+
+  // Creating a project requires the same device unlock as the rest of the editor.
+  const ensureDeviceUnlock = async () => {
+    if (unlockToken) return;
+    const status = await fetch('/api/local/device-auth/status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    if (status.ok) return; // a recent unlock cookie is still valid
+    if (!window.isSecureContext || !browserSupportsWebAuthn()) {
+      throw new Error('Device unlock requires HTTPS (or localhost) and a browser that supports passkeys.');
+    }
+    const challenge = await postAuth('/api/local/device-auth/options', {});
+    const credential = challenge.mode === 'registration'
+      ? await startRegistration({ optionsJSON: challenge.options })
+      : await startAuthentication({ optionsJSON: challenge.options });
+    const verification = await postAuth('/api/local/device-auth/verify', {
+      ceremonyId: challenge.ceremonyId,
+      mode: challenge.mode,
+      response: credential,
+    });
+    if (!verification.verified || !verification.token) throw new Error('The device could not verify your identity.');
+    unlockToken = String(verification.token);
+  };
 
   const form = document.querySelector<HTMLFormElement>('[data-project-form]');
   const statusMessage = document.querySelector<HTMLElement>('[data-form-status]');
@@ -305,11 +347,15 @@ const today = new Date().toISOString().slice(0, 10);
     const formData = new FormData(form);
     const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
     if (submit) submit.disabled = true;
-    if (statusMessage) statusMessage.textContent = 'Creating the project…';
     try {
+      if (statusMessage) statusMessage.textContent = 'Confirm with Windows Hello to create the project…';
+      await ensureDeviceUnlock();
+      if (statusMessage) statusMessage.textContent = 'Creating the project…';
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (unlockToken) headers['X-Portfolio-Unlock'] = unlockToken;
       const response = await fetch('/api/local/projects', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           name: String(formData.get('name') ?? ''),
           description: String(formData.get('description') ?? ''),
@@ -322,6 +368,7 @@ const today = new Date().toISOString().slice(0, 10);
       });
       const result = await response.json();
       if (!response.ok) {
+        if (response.status === 401) unlockToken = '';
         const error = new Error(result.error ?? 'The project could not be created.') as RepositoryError;
         error.field = result.field;
         throw error;

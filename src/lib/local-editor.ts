@@ -429,6 +429,7 @@ export function localEditorPlugin(projectsRoot = defaultProjectsRoot): Plugin {
         try {
           const body = await readJson(request);
           if (pathname === '/api/local/projects') {
+            requireDeviceUnlock(request);
             sendJson(response, 201, await createProject(projectsRoot, body));
             return;
           }
