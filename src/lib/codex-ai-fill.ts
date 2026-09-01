@@ -395,9 +395,16 @@ async function runCodex(prompt: string): Promise<FillResult> {
 async function runClaude(prompt: string): Promise<FillResult> {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'portfolio-ai-fill-'));
   // Claude Code's schema validator rejects the $schema meta-schema key, so drop it.
+  // The shared schema file stays free of maxLength (OpenAI structured outputs reject
+  // that keyword), so inject the field limits here for Claude only.
+  const fieldLimits: Record<string, number> = { name: 120, description: 500, why: 3000 };
   const { $schema: _dropped, ...schema } = JSON.parse(
     await readFile(path.resolve('src/lib/ai-fill-output.schema.json'), 'utf8'),
   ) as Record<string, unknown>;
+  const schemaProperties = (schema.properties ?? {}) as Record<string, Record<string, unknown>>;
+  for (const [field, max] of Object.entries(fieldLimits)) {
+    if (schemaProperties[field]) schemaProperties[field].maxLength = max;
+  }
   const schemaJson = JSON.stringify(schema);
   const executable = process.env.CLAUDE_EXECUTABLE || 'claude';
 
@@ -466,8 +473,18 @@ async function runClaude(prompt: string): Promise<FillResult> {
         raw = null;
       }
     }
+    // Clamp overlong strings instead of failing the whole draft over a few characters.
+    if (raw && typeof raw === 'object') {
+      const record = raw as Record<string, unknown>;
+      for (const [field, max] of Object.entries(fieldLimits)) {
+        if (typeof record[field] === 'string') record[field] = (record[field] as string).trim().slice(0, max);
+      }
+    }
     const parsed = resultSchema.safeParse(raw);
-    if (!parsed.success) throw new AiFillError('Claude Code returned a draft in an unexpected format. Please try again.', 502);
+    if (!parsed.success) {
+      console.error('[ai-fill] Claude draft failed validation:', parsed.error.issues.slice(0, 3), JSON.stringify(raw)?.slice(0, 2_000));
+      throw new AiFillError('Claude Code returned a draft in an unexpected format. Please try again.', 502);
+    }
     return parsed.data;
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });
