@@ -40,10 +40,8 @@ const privateProject = data.privacy === 'private';
             <a
               class="project-card__artifact"
               data-project-carousel-slide
-              href={artifact.href}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`Open ${artifact.filename}`}
+              href={`/projects/${data.slug}#edit`}
+              aria-label={`Edit ${data.name}`}
               aria-hidden={index === 0 ? 'false' : 'true'}
               tabindex={index === 0 ? undefined : '-1'}
             >

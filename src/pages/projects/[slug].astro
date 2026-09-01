@@ -171,6 +171,15 @@ const privateProject = data.privacy === 'private';
 
   type FormError = Error & { field?: string; authRequired?: boolean; authProvider?: string; status?: number };
 
+  // Arriving with #edit (e.g. from a portfolio-index card) opens the editor directly.
+  if (window.location.hash === '#edit') {
+    const editDetails = document.querySelector<HTMLDetailsElement>('[data-project-edit-details]');
+    if (editDetails && editDetails.dataset.private !== 'true') {
+      editDetails.open = true;
+      editDetails.scrollIntoView({ block: 'start' });
+    }
+  }
+
   document.querySelectorAll<HTMLElement>('[data-artifact-carousel]').forEach((carousel) => {
     const track = carousel.querySelector<HTMLElement>('[data-carousel-track]');
     const slides = [...carousel.querySelectorAll<HTMLElement>('[data-carousel-slide]')];
