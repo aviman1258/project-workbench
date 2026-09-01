@@ -181,13 +181,32 @@ const privateProject = data.privacy === 'private';
   type FormError = Error & { field?: string; authRequired?: boolean; authProvider?: string; status?: number };
 
   // Arriving with #edit (e.g. from a portfolio-index card) opens the editor directly.
+  // Strip the hash afterwards so later reloads (media saves reload the page) don't
+  // scroll back up to the editor again.
   if (window.location.hash === '#edit') {
     const editDetails = document.querySelector<HTMLDetailsElement>('[data-project-edit-details]');
     if (editDetails && editDetails.dataset.private !== 'true') {
       editDetails.open = true;
       editDetails.scrollIntoView({ block: 'start' });
     }
+    window.history.replaceState(null, '', window.location.pathname);
   }
+
+  // Media saves reload the page (astro re-syncs content); bring the reader back to the
+  // tiles they were working with. An absolute scroll position won't do — lazy-loaded
+  // images keep the page short at restore time, so the position would clamp.
+  try {
+    if (window.sessionStorage.getItem('media-op-return') !== null) {
+      window.sessionStorage.removeItem('media-op-return');
+      const returnToTiles = () =>
+        document.querySelector('[data-media-tiles]')?.scrollIntoView({ block: 'center' });
+      returnToTiles();
+      window.addEventListener('load', () => requestAnimationFrame(returnToTiles), { once: true });
+    }
+  } catch { /* storage unavailable (private mode etc.) is fine */ }
+  const rememberScroll = () => {
+    try { window.sessionStorage.setItem('media-op-return', 'tiles'); } catch { /* ignore */ }
+  };
 
   document.querySelectorAll<HTMLElement>('[data-artifact-carousel]').forEach((carousel) => {
     const track = carousel.querySelector<HTMLElement>('[data-carousel-track]');
@@ -476,6 +495,7 @@ const privateProject = data.privacy === 'private';
           });
           await postJson(`/api/local/projects/${mediaSlug}/artifacts`, { filename: file.name, data: dataUrl.slice(dataUrl.indexOf(',') + 1) });
         }
+        rememberScroll();
         setMediaStatus(rejected.length ? `Added ${accepted.length}, skipped ${rejected.length} unsupported file(s). Refreshing…` : 'Added. Refreshing the artifacts…');
         // index.md changed, so astro dev reloads the page itself once content re-syncs;
         // this slower manual reload is only a fallback (racing it renders stale data)
@@ -614,6 +634,7 @@ const privateProject = data.privacy === 'private';
       setMediaStatus('Saving the new order…');
       try {
         await postJson(`/api/local/projects/${mediaSlug}/artifacts/order`, { order });
+        rememberScroll();
         setMediaStatus('Order saved. Refreshing…');
         window.setTimeout(() => window.location.reload(), 2000);
       } catch (error) {
@@ -638,6 +659,7 @@ const privateProject = data.privacy === 'private';
       try {
         await postJson(`/api/local/projects/${mediaSlug}/artifacts/delete`, { filename: pendingDelete });
         deleteDialog.close();
+        rememberScroll();
         setMediaStatus('Deleted. Refreshing the artifacts…');
         window.setTimeout(() => window.location.reload(), 2000);
       } catch (error) {
