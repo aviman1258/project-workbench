@@ -1,14 +1,14 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { privacyLevels, projectStatuses } from '../lib/project-schema';
-import { formatLabel } from '../lib/projects';
+import { formatLabel, withBase } from '../lib/projects';
 
 const today = new Date().toISOString().slice(0, 10);
 ---
 
 <BaseLayout title="Add a project" description="Create a new local portfolio project from the browser.">
   <div class="page-shell editor-page">
-    <a class="back-link" href="/">← Portfolio index</a>
+    <a class="back-link" href={withBase('/')}>← Portfolio index</a>
 
     <header class="editor-hero">
       <div>
@@ -374,7 +374,7 @@ const today = new Date().toISOString().slice(0, 10);
         throw error;
       }
       if (statusMessage) statusMessage.textContent = 'Created. Opening the project…';
-      window.location.href = `/projects/${result.slug}/`;
+      window.location.href = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/projects/${result.slug}/`;
     } catch (error) {
       const problem = error as RepositoryError;
       showFormError(problem.message || 'The project could not be created.', problem.field);

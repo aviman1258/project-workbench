@@ -4,6 +4,21 @@ import path from 'node:path';
 
 const projectsRoot = path.resolve('src/content/projects');
 
+// Public deploys (PUBLIC_ONLY=1, set by the GitHub Pages workflow) exclude private
+// projects from every page, path, and artifact endpoint. Local dev shows everything.
+export const publicOnlyBuild = process.env.PUBLIC_ONLY === '1';
+
+export function listedProjects<T extends { data: { privacy: string } }>(projects: T[]): T[] {
+  return publicOnlyBuild ? projects.filter((project) => project.data.privacy === 'public') : projects;
+}
+
+// Prefix an internal absolute path with the configured base (GitHub Pages serves
+// the site under /<repo>/; locally BASE_URL is just "/").
+export function withBase(pathname: string): string {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+  return `${base}${pathname}`;
+}
+
 export type ProjectArtifact = {
   filename: string;
   relativePath: string;
@@ -61,10 +76,10 @@ export async function loadArtifacts(
             filename: entry.name,
             relativePath,
             sourcePath,
-            href: `/project-artifacts/${project.data.slug}/${relativePath
+            href: withBase(`/project-artifacts/${project.data.slug}/${relativePath
               .split('/')
               .map(encodeURIComponent)
-              .join('/')}`,
+              .join('/')}`),
             ...type,
           }
         : null;

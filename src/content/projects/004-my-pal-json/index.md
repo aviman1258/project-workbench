@@ -5,9 +5,9 @@ name: My Pal JSON
 description: A browser-based JSON and API workbench for sending requests, inspecting structures, formatting payloads, and generating models in six languages.
 why: The project consolidates common API exploration tasks into one lightweight browser workspace, reducing the need to move JSON between separate request, formatting, structure-inspection, and model-generation tools.
 status: dev
-privacy: private
+privacy: public
 startDate: 2024-10-03
-updatedDate: 2024-10-03
+updatedDate: 2026-09-01
 ---
 
 ## Observation

@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { withBase } from '../lib/projects';
 ---
 
 <BaseLayout title="Not found">
@@ -7,6 +8,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     <p class="eyebrow">404 · Missing record</p>
     <h1>This project isn’t in the portfolio.</h1>
     <p>It may have moved, been archived, or never existed.</p>
-    <a href="/">Return to the portfolio index →</a>
+    <a href={withBase('/')}>Return to the portfolio index →</a>
   </div>
 </BaseLayout>

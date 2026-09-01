@@ -1,10 +1,10 @@
 import type { APIRoute, GetStaticPaths } from 'astro';
 import { getCollection } from 'astro:content';
 import { readFile } from 'node:fs/promises';
-import { loadArtifacts } from '../../../lib/projects';
+import { listedProjects, loadArtifacts } from '../../../lib/projects';
 
 export const getStaticPaths = (async () => {
-  const projects = await getCollection('projects');
+  const projects = listedProjects(await getCollection('projects'));
   const paths = await Promise.all(
     projects.map(async (project) => {
       const artifacts = await loadArtifacts(project);

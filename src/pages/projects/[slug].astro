@@ -2,11 +2,11 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
 import StatusBadge from '../../components/StatusBadge.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { formatDate, formatLabel, loadArtifacts } from '../../lib/projects';
+import { formatDate, formatLabel, listedProjects, loadArtifacts, withBase } from '../../lib/projects';
 import { privacyLevels, projectStatuses } from '../../lib/project-schema';
 
 export async function getStaticPaths() {
-  const projects = await getCollection('projects');
+  const projects = listedProjects(await getCollection('projects'));
   return projects.map((project) => ({ params: { slug: project.data.slug }, props: { project } }));
 }
 
@@ -22,7 +22,7 @@ const privateProject = data.privacy === 'private';
 
 <BaseLayout title={data.name} description={data.description}>
   <div class="page-shell project-page">
-    <a class="back-link" href="/">← Portfolio index</a>
+    <a class="back-link" href={withBase('/')}>← Portfolio index</a>
 
     <header class="project-hero">
       <div class="project-hero__main">

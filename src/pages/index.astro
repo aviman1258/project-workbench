@@ -2,7 +2,8 @@
 import { getCollection } from 'astro:content';
 import ProjectCard from '../components/ProjectCard.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
-const projects = (await getCollection('projects')).sort((a, b) => b.data.updatedDate.getTime() - a.data.updatedDate.getTime());
+import { listedProjects } from '../lib/projects';
+const projects = listedProjects(await getCollection('projects')).sort((a, b) => b.data.updatedDate.getTime() - a.data.updatedDate.getTime());
 const stats = [
   { label: 'Ideas', value: projects.filter((project) => project.data.status === 'idea').length },
   { label: 'In development', value: projects.filter((project) => project.data.status === 'dev').length },
@@ -155,7 +156,7 @@ const stats = [
 
   const requestedPrivateSlug = new URLSearchParams(window.location.search).get('unlock');
   if (requestedPrivateSlug && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(requestedPrivateSlug)) {
-    showUnlockPanel(`/projects/${requestedPrivateSlug}`);
+    showUnlockPanel(`${import.meta.env.BASE_URL.replace(/\/$/, '')}/projects/${requestedPrivateSlug}`);
     if (unlockStatus) unlockStatus.textContent = 'This project is locked. Select unlock to continue.';
   }
 
