@@ -81,54 +81,6 @@ const privateProject = data.privacy === 'private';
           </form>
         </details>
 
-        <details>
-          <summary data-protected-project-control={privateProject ? 'true' : undefined} data-unlocked-label="Add artifact">
-            {privateProject ? (
-              <svg class="project-control-lock" aria-hidden="true" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
-            ) : <span aria-hidden="true">＋</span>}
-            <span data-protected-label>{privateProject ? 'Unlock to add artifact' : 'Add artifact'}</span>
-          </summary>
-          <form class="compact-form" data-artifact-form data-project-slug={data.slug} novalidate>
-            <label class="file-drop field"><span>Artifact file</span><input name="artifact" type="file" accept=".png,.jpg,.jpeg,.pdf,.mp4" required /><small>PNG, JPG, PDF, or MP4 · up to 25 MB</small></label>
-            <div class="compact-form__actions"><p class="form-status" data-artifact-status aria-live="assertive"></p><button class="primary-button" type="submit">Save artifact</button></div>
-          </form>
-        </details>
-
-        {artifacts.length > 0 && (
-          <details>
-            <summary data-protected-project-control={privateProject ? 'true' : undefined} data-unlocked-label="Manage media">
-              {privateProject ? (
-                <svg class="project-control-lock" aria-hidden="true" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
-              ) : <span aria-hidden="true">⇅</span>}
-              <span data-protected-label>{privateProject ? 'Unlock to manage media' : 'Manage media'}</span>
-            </summary>
-            <div class="compact-form artifact-manager" data-artifact-manager data-project-slug={data.slug}>
-              <p class="artifact-manager__hint">Drag a row (or use the arrows) to set the display order. Deleting removes the file from the project folder.</p>
-              <ul class="artifact-manager__list" data-artifact-list>
-                {artifacts.map((artifact) => (
-                  <li class="artifact-manager__item" draggable="true" data-artifact-item data-filename={artifact.filename}>
-                    <span class="artifact-manager__grip" aria-hidden="true">⠿</span>
-                    {artifact.kind === 'image' ? (
-                      <img class="artifact-manager__thumb" src={artifact.href} alt="" loading="lazy" />
-                    ) : (
-                      <span class="artifact-manager__thumb artifact-manager__thumb--label">{artifact.kind.toUpperCase()}</span>
-                    )}
-                    <span class="artifact-manager__name">{artifact.filename}</span>
-                    <span class="artifact-manager__buttons">
-                      <button type="button" data-artifact-move="up" aria-label={`Move ${artifact.filename} earlier`}>↑</button>
-                      <button type="button" data-artifact-move="down" aria-label={`Move ${artifact.filename} later`}>↓</button>
-                      <button type="button" class="artifact-manager__delete" data-artifact-delete aria-label={`Delete ${artifact.filename}`}>Delete</button>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <div class="compact-form__actions">
-                <p class="form-status" data-artifact-manager-status aria-live="assertive"></p>
-                <button class="primary-button" type="button" data-artifact-order-save hidden>Save order</button>
-              </div>
-            </div>
-          </details>
-        )}
       </div>
     </section>
 
@@ -138,11 +90,16 @@ const privateProject = data.privacy === 'private';
       <div class="prose"><p>{data.why}</p></div>
     </article>
 
-    <section class="artifacts-section" id="artifacts">
+    <section class="artifacts-section" id="artifacts" data-media-section data-project-slug={data.slug}>
       <div class="section-kicker"><span>02</span> Supporting artifacts</div>
-      <div class="section-heading section-heading--detail"><div><h2>Evidence from the work</h2><p>Images, documents, and recordings stored alongside this project.</p></div></div>
+      <div class="section-heading section-heading--detail">
+        <div><h2>Evidence from the work</h2><p>Images, documents, and recordings stored alongside this project. Drop files onto the carousel to add them, drag the tiles to reorder.</p></div>
+        <button type="button" class="media-add-button" data-media-browse>＋ Add media</button>
+      </div>
+      <input type="file" multiple accept=".png,.jpg,.jpeg,.pdf,.mp4" hidden data-media-input />
+      <p class="form-status media-status" data-media-status aria-live="assertive"></p>
       {artifacts.length > 0 ? (
-        <div class="artifact-carousel" data-artifact-carousel tabindex={artifacts.length > 1 ? '0' : undefined} aria-label="Project artifacts carousel">
+        <div class="artifact-carousel" data-artifact-carousel data-media-dropzone tabindex={artifacts.length > 1 ? '0' : undefined} aria-label="Project artifacts carousel">
           <div class="artifact-carousel__viewport" data-carousel-viewport>
             <div class="artifact-carousel__track" data-carousel-track>
               {artifacts.map((artifact, index) => (
@@ -181,19 +138,35 @@ const privateProject = data.privacy === 'private';
             </div>
           )}
 
-          {artifacts.length > 1 && (
-            <div class="artifact-carousel__thumbnails" aria-label="Choose an artifact">
-              {artifacts.map((artifact, index) => (
-                <button type="button" data-carousel-thumbnail data-active={index === 0 ? 'true' : 'false'} aria-label={`Show ${artifact.filename}`} aria-current={index === 0 ? 'true' : undefined}>
-                  {artifact.kind === 'image' ? <img src={artifact.href} alt="" loading="lazy" /> : <span>{artifact.kind.toUpperCase()}</span>}
-                </button>
-              ))}
-            </div>
-          )}
+          <div class="artifact-carousel__thumbnails" data-media-tiles aria-label="Choose an artifact, or drag a tile to reorder">
+            {artifacts.map((artifact, index) => (
+              <button type="button" draggable="true" data-carousel-thumbnail data-media-tile data-filename={artifact.filename} data-active={index === 0 ? 'true' : 'false'} aria-label={`Show ${artifact.filename}`} aria-current={index === 0 ? 'true' : undefined}>
+                {artifact.kind === 'image' ? <img src={artifact.href} alt="" loading="lazy" draggable="false" /> : <span>{artifact.kind.toUpperCase()}</span>}
+              </button>
+            ))}
+          </div>
+
+          <div class="media-trash-row">
+            <span class="media-trash" data-media-trash aria-label="Drag a media tile here to delete it">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+              <small>Drag a tile here to delete</small>
+            </span>
+          </div>
         </div>
       ) : (
-        <div class="artifact-empty"><span aria-hidden="true">□</span><div><h3>No artifacts attached yet</h3><p>Use “Add artifact” above when you have something worth keeping.</p></div></div>
+        <button type="button" class="artifact-empty artifact-empty--dropzone" data-media-dropzone data-media-browse>
+          <span aria-hidden="true">⬇</span><div><h3>No artifacts attached yet</h3><p>Drop images, PDFs, or videos here — or click to browse your files.</p></div>
+        </button>
       )}
+
+      <dialog class="media-delete-dialog" data-media-delete-dialog>
+        <h3>Delete this media?</h3>
+        <p><strong data-media-delete-name></strong> will be removed from the project folder. This cannot be undone.</p>
+        <div class="media-delete-dialog__actions">
+          <button type="button" class="media-delete-dialog__cancel" data-media-delete-cancel>Cancel</button>
+          <button type="button" class="media-delete-dialog__confirm" data-media-delete-confirm>Delete</button>
+        </div>
+      </dialog>
     </section>
   </div>
 </BaseLayout>
@@ -458,120 +431,168 @@ const privateProject = data.privacy === 'private';
     }
   });
 
-  const artifactForm = document.querySelector<HTMLFormElement>('[data-artifact-form]');
-  artifactForm?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const status = artifactForm.querySelector<HTMLElement>('[data-artifact-status]');
-    clearFieldErrors(artifactForm);
-    const invalid = firstInvalid(artifactForm);
-    if (invalid) { showError(artifactForm, status, invalid.validationMessage || 'Choose an artifact file.', invalid.name); return; }
-    const file = (artifactForm.elements.namedItem('artifact') as HTMLInputElement | null)?.files?.[0];
-    if (!file) return;
-    if (file.size > 25 * 1024 * 1024) { showError(artifactForm, status, 'Choose a file that is 25 MB or smaller.', 'artifact'); return; }
-    setBusy(artifactForm, true);
-    if (status) status.textContent = 'Saving the artifact…';
-    try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader(); reader.addEventListener('load', () => resolve(String(reader.result))); reader.addEventListener('error', () => reject(new Error('The selected file could not be read.'))); reader.readAsDataURL(file);
-      });
-      await postJson(`/api/local/projects/${encodeURIComponent(artifactForm.dataset.projectSlug ?? '')}/artifacts`, { filename: file.name, data: dataUrl.slice(dataUrl.indexOf(',') + 1) });
-      if (status) status.textContent = 'Saved. Refreshing the artifacts…';
-      window.setTimeout(() => window.location.reload(), 400);
-    } catch (error) {
+  const mediaSection = document.querySelector<HTMLElement>('[data-media-section]');
+  if (mediaSection) {
+    const mediaSlug = encodeURIComponent(mediaSection.dataset.projectSlug ?? '');
+    const mediaStatus = mediaSection.querySelector<HTMLElement>('[data-media-status]');
+    const mediaInput = mediaSection.querySelector<HTMLInputElement>('[data-media-input]');
+    const tilesRow = mediaSection.querySelector<HTMLElement>('[data-media-tiles]');
+    const trash = mediaSection.querySelector<HTMLElement>('[data-media-trash]');
+    const deleteDialog = mediaSection.querySelector<HTMLDialogElement>('[data-media-delete-dialog]');
+    const deleteName = mediaSection.querySelector<HTMLElement>('[data-media-delete-name]');
+
+    const setMediaStatus = (message: string, error = false) => {
+      if (!mediaStatus) return;
+      mediaStatus.textContent = message;
+      mediaStatus.classList.toggle('media-status--error', error);
+    };
+    const mediaFailure = (error: unknown, fallback: string) => {
       const problem = error as FormError;
       if (problem.status === 401) editUnlockToken = '';
-      showError(artifactForm, status, problem.message || 'The artifact could not be saved.', problem.field);
-      setBusy(artifactForm, false);
-    }
-  });
+      setMediaStatus(problem.message || fallback, true);
+    };
 
-  const artifactManager = document.querySelector<HTMLElement>('[data-artifact-manager]');
-  if (artifactManager) {
-    const managerSlug = encodeURIComponent(artifactManager.dataset.projectSlug ?? '');
-    const list = artifactManager.querySelector<HTMLElement>('[data-artifact-list]')!;
-    const managerStatus = artifactManager.querySelector<HTMLElement>('[data-artifact-manager-status]');
-    const saveButton = artifactManager.querySelector<HTMLButtonElement>('[data-artifact-order-save]')!;
-    const initialOrder = JSON.stringify(currentOrder());
-
-    function currentOrder(): string[] {
-      return [...list.querySelectorAll<HTMLElement>('[data-artifact-item]')].map((item) => item.dataset.filename ?? '');
-    }
-
-    function markDirty() {
-      saveButton.hidden = JSON.stringify(currentOrder()) === initialOrder;
-      if (!saveButton.hidden && managerStatus) managerStatus.textContent = 'Order changed — not saved yet.';
-    }
-
-    let dragged: HTMLElement | null = null;
-    list.addEventListener('dragstart', (event) => {
-      const item = (event.target as HTMLElement).closest<HTMLElement>('[data-artifact-item]');
-      if (!item) return;
-      dragged = item;
-      item.classList.add('artifact-manager__item--dragging');
-      event.dataTransfer?.setData('text/plain', item.dataset.filename ?? '');
-      if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
-    });
-    list.addEventListener('dragover', (event) => {
-      if (!dragged) return;
-      event.preventDefault();
-      const over = (event.target as HTMLElement).closest<HTMLElement>('[data-artifact-item]');
-      if (!over || over === dragged) return;
-      const rect = over.getBoundingClientRect();
-      const before = event.clientY < rect.top + rect.height / 2;
-      list.insertBefore(dragged, before ? over : over.nextSibling);
-    });
-    list.addEventListener('drop', (event) => event.preventDefault());
-    list.addEventListener('dragend', () => {
-      dragged?.classList.remove('artifact-manager__item--dragging');
-      dragged = null;
-      markDirty();
-    });
-
-    list.addEventListener('click', async (event) => {
-      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button');
-      const item = button?.closest<HTMLElement>('[data-artifact-item]');
-      if (!button || !item) return;
-
-      if (button.dataset.artifactMove) {
-        const sibling = button.dataset.artifactMove === 'up' ? item.previousElementSibling : item.nextElementSibling;
-        if (sibling) {
-          list.insertBefore(item, button.dataset.artifactMove === 'up' ? sibling : sibling.nextSibling);
-          markDirty();
-        }
+    // --- adding media: file picker + drop anywhere on the carousel ---
+    const allowedMedia = /\.(png|jpe?g|pdf|mp4)$/i;
+    let uploading = false;
+    const uploadMediaFiles = async (incoming: FileList | File[]) => {
+      if (uploading) return;
+      const files = [...incoming];
+      const rejected = files.filter((file) => !allowedMedia.test(file.name) || file.size > 25 * 1024 * 1024);
+      const accepted = files.filter((file) => !rejected.includes(file));
+      if (!accepted.length) {
+        setMediaStatus('Media must be PNG, JPG, PDF, or MP4 files up to 25 MB.', true);
         return;
       }
-
-      if (button.hasAttribute('data-artifact-delete')) {
-        const filename = item.dataset.filename ?? '';
-        if (!window.confirm(`Delete "${filename}" from this project? The file is removed from the project folder.`)) return;
-        button.disabled = true;
-        if (managerStatus) managerStatus.textContent = `Deleting ${filename}…`;
-        try {
-          await postJson(`/api/local/projects/${managerSlug}/artifacts/delete`, { filename });
-          if (managerStatus) managerStatus.textContent = 'Deleted. Refreshing the artifacts…';
-          window.setTimeout(() => window.location.reload(), 400);
-        } catch (error) {
-          const problem = error as FormError;
-          if (problem.status === 401) editUnlockToken = '';
-          if (managerStatus) managerStatus.textContent = problem.message || 'The artifact could not be deleted.';
-          button.disabled = false;
+      uploading = true;
+      try {
+        for (const [index, file] of accepted.entries()) {
+          setMediaStatus(`Adding ${file.name} (${index + 1} of ${accepted.length})…`);
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.addEventListener('load', () => resolve(String(reader.result)));
+            reader.addEventListener('error', () => reject(new Error(`${file.name} could not be read.`)));
+            reader.readAsDataURL(file);
+          });
+          await postJson(`/api/local/projects/${mediaSlug}/artifacts`, { filename: file.name, data: dataUrl.slice(dataUrl.indexOf(',') + 1) });
         }
+        setMediaStatus(rejected.length ? `Added ${accepted.length}, skipped ${rejected.length} unsupported file(s). Refreshing…` : 'Added. Refreshing the artifacts…');
+        window.setTimeout(() => window.location.reload(), 400);
+      } catch (error) {
+        uploading = false;
+        mediaFailure(error, 'The media could not be added.');
+      }
+    };
+
+    mediaSection.querySelectorAll<HTMLElement>('[data-media-browse]').forEach((trigger) => {
+      trigger.addEventListener('click', () => mediaInput?.click());
+    });
+    mediaInput?.addEventListener('change', () => {
+      if (mediaInput.files?.length) void uploadMediaFiles(mediaInput.files);
+      mediaInput.value = '';
+    });
+
+    const isFileDrag = (event: DragEvent) => [...(event.dataTransfer?.types ?? [])].includes('Files');
+    mediaSection.querySelectorAll<HTMLElement>('[data-media-dropzone]').forEach((zone) => {
+      zone.addEventListener('dragover', (event) => {
+        if (!isFileDrag(event)) return;
+        event.preventDefault();
+        zone.classList.add('media-dropzone--over');
+      });
+      zone.addEventListener('dragleave', () => zone.classList.remove('media-dropzone--over'));
+      zone.addEventListener('drop', (event) => {
+        if (!isFileDrag(event)) return;
+        event.preventDefault();
+        zone.classList.remove('media-dropzone--over');
+        if (event.dataTransfer?.files.length) void uploadMediaFiles(event.dataTransfer.files);
+      });
+    });
+
+    // --- reordering: drag the tiles under the carousel; order saves on drop ---
+    let draggedTile: HTMLElement | null = null;
+    let tileSnapshot: HTMLElement[] = [];
+    let droppedOnTrash = false;
+
+    const tileOrder = () =>
+      [...(tilesRow?.querySelectorAll<HTMLElement>('[data-media-tile]') ?? [])].map((tile) => tile.dataset.filename ?? '');
+    const restoreTileOrder = () => tileSnapshot.forEach((tile) => tilesRow?.appendChild(tile));
+
+    tilesRow?.addEventListener('dragstart', (event) => {
+      const tile = (event.target as HTMLElement).closest<HTMLElement>('[data-media-tile]');
+      if (!tile) return;
+      draggedTile = tile;
+      droppedOnTrash = false;
+      tileSnapshot = [...tilesRow.querySelectorAll<HTMLElement>('[data-media-tile]')];
+      tile.classList.add('media-tile--dragging');
+      trash?.classList.add('media-trash--armed');
+      event.dataTransfer?.setData('text/plain', tile.dataset.filename ?? '');
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+    });
+    tilesRow?.addEventListener('dragover', (event) => {
+      if (!draggedTile) return;
+      event.preventDefault();
+      const over = (event.target as HTMLElement).closest<HTMLElement>('[data-media-tile]');
+      if (!over || over === draggedTile) return;
+      const rect = over.getBoundingClientRect();
+      tilesRow.insertBefore(draggedTile, event.clientX < rect.left + rect.width / 2 ? over : over.nextSibling);
+    });
+    tilesRow?.addEventListener('drop', (event) => {
+      if (draggedTile) event.preventDefault();
+    });
+    tilesRow?.addEventListener('dragend', async () => {
+      draggedTile?.classList.remove('media-tile--dragging');
+      trash?.classList.remove('media-trash--armed', 'media-trash--target');
+      const finished = draggedTile;
+      draggedTile = null;
+      if (!finished || droppedOnTrash) return;
+      const order = tileOrder();
+      if (JSON.stringify(order) === JSON.stringify(tileSnapshot.map((tile) => tile.dataset.filename ?? ''))) return;
+      setMediaStatus('Saving the new order…');
+      try {
+        await postJson(`/api/local/projects/${mediaSlug}/artifacts/order`, { order });
+        setMediaStatus('Order saved. Refreshing…');
+        window.setTimeout(() => window.location.reload(), 400);
+      } catch (error) {
+        restoreTileOrder();
+        mediaFailure(error, 'The order could not be saved.');
       }
     });
 
-    saveButton.addEventListener('click', async () => {
-      saveButton.disabled = true;
-      if (managerStatus) managerStatus.textContent = 'Saving the new order…';
+    // --- deleting: drag a tile onto the trash, confirm in a modal ---
+    let pendingDelete = '';
+    trash?.addEventListener('dragover', (event) => {
+      if (!draggedTile) return;
+      event.preventDefault();
+      trash.classList.add('media-trash--target');
+    });
+    trash?.addEventListener('dragleave', () => trash.classList.remove('media-trash--target'));
+    trash?.addEventListener('drop', (event) => {
+      if (!draggedTile) return;
+      event.preventDefault();
+      droppedOnTrash = true;
+      restoreTileOrder();
+      pendingDelete = draggedTile.dataset.filename ?? '';
+      if (deleteName) deleteName.textContent = pendingDelete;
+      deleteDialog?.showModal();
+    });
+
+    deleteDialog?.querySelector('[data-media-delete-cancel]')?.addEventListener('click', () => deleteDialog.close());
+    deleteDialog?.querySelector<HTMLButtonElement>('[data-media-delete-confirm]')?.addEventListener('click', async (event) => {
+      const confirmButton = event.currentTarget as HTMLButtonElement;
+      confirmButton.disabled = true;
+      setMediaStatus(`Deleting ${pendingDelete}…`);
       try {
-        await postJson(`/api/local/projects/${managerSlug}/artifacts/order`, { order: currentOrder() });
-        if (managerStatus) managerStatus.textContent = 'Saved. Refreshing the artifacts…';
+        await postJson(`/api/local/projects/${mediaSlug}/artifacts/delete`, { filename: pendingDelete });
+        deleteDialog.close();
+        setMediaStatus('Deleted. Refreshing the artifacts…');
         window.setTimeout(() => window.location.reload(), 400);
       } catch (error) {
-        const problem = error as FormError;
-        if (problem.status === 401) editUnlockToken = '';
-        if (managerStatus) managerStatus.textContent = problem.message || 'The order could not be saved.';
-        saveButton.disabled = false;
+        deleteDialog.close();
+        mediaFailure(error, 'The media could not be deleted.');
+      } finally {
+        confirmButton.disabled = false;
       }
     });
   }
+
 </script>
