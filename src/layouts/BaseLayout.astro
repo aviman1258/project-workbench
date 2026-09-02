@@ -24,13 +24,15 @@ const CARD = {
       name: 'AWS Certified Cloud Practitioner',
       issuer: 'Amazon Web Services',
       href: 'https://www.credly.com/users/avishek-chandra.d94e59c9',
+      badge: withBase('/certs/aws-cloud-practitioner.png'),
     },
     {
       name: 'Datadog Certified: Datadog Fundamentals',
       issuer: 'Datadog',
       href: 'https://www.credly.com/users/avishek-chandra.d94e59c9',
+      badge: withBase('/certs/datadog-fundamentals.png'),
     },
-  ] as { name: string; issuer: string; href: string }[],
+  ] as { name: string; issuer: string; href: string; badge: string }[],
 };
 ---
 
@@ -131,8 +133,11 @@ const CARD = {
           <h4>Certifications</h4>
           {CARD.certifications.map((cert) => (
             <a href={cert.href} target="_blank" rel="noreferrer">
-              <strong>{cert.name}</strong>
-              <span>{cert.issuer}</span>
+              <img src={cert.badge} alt="" loading="lazy" />
+              <span class="business-card__cert-text">
+                <strong>{cert.name}</strong>
+                <span>{cert.issuer}</span>
+              </span>
             </a>
           ))}
         </div>

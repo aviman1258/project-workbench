@@ -209,7 +209,9 @@ a {
 }
 
 .business-card__certs a {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 14px;
   padding: 11px 14px;
   margin-bottom: 8px;
   border: 1px solid var(--line);
@@ -222,6 +224,17 @@ a {
 .business-card__certs a:hover {
   border-color: var(--forest);
   background: var(--moss);
+}
+
+.business-card__certs img {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.business-card__cert-text {
+  min-width: 0;
 }
 
 .business-card__certs strong {

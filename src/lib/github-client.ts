@@ -105,6 +105,18 @@ export async function getVaultText(token: string, path: string): Promise<string>
   return decodeContent(String(file.content));
 }
 
+export async function getVaultFile(token: string, path: string): Promise<{ sha: string; text: string }> {
+  const file = await gh(token, `/repos/${GITHUB_OWNER}/${VAULT_REPO}/contents/${path}`);
+  return { sha: String(file.sha), text: decodeContent(String(file.content)) };
+}
+
+export function putVaultFile(token: string, path: string, contentBase64: string, message: string, sha?: string) {
+  return gh(token, `/repos/${GITHUB_OWNER}/${VAULT_REPO}/contents/${path}`, {
+    method: 'PUT',
+    body: JSON.stringify({ message, content: contentBase64, branch: GITHUB_BRANCH, ...(sha ? { sha } : {}) }),
+  });
+}
+
 export async function listVaultArtifacts(token: string, folder: string): Promise<{ name: string; path: string; size: number }[]> {
   try {
     const entries = await gh(token, `/repos/${GITHUB_OWNER}/${VAULT_REPO}/contents/projects/${folder}/artifacts`);

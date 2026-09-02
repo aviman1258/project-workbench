@@ -31,8 +31,8 @@ const { id } = Astro.props;
 </section>
 
 <script>
-  import { parse } from 'yaml';
-  import { findVaultFolder, getVaultText, getVaultBlobUrl, listVaultArtifacts, wireTokenPanel } from '../lib/github-client';
+  import { parse, stringify } from 'yaml';
+  import { encodeText, findVaultFolder, getVaultFile, getVaultText, getVaultBlobUrl, listVaultArtifacts, putVaultFile, wireTokenPanel } from '../lib/github-client';
 
   const root = document.querySelector<HTMLElement>('[data-private-vault]');
   if (root) {
@@ -108,10 +108,131 @@ const { id } = Astro.props;
         }
         status.textContent = 'Unlocked.';
         loaded = true;
+        enableVaultEditing(token, folder);
       } catch (error) {
         status.textContent = (error as Error).message || 'The private content could not be loaded.';
       }
     };
+
+    // --- inline editing after unlock: pencils that commit to the vault repo ---
+    const PENCIL = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>`;
+    const VAULT_FIELDS: Record<string, { kind: 'input' | 'textarea' | 'select' | 'date'; max?: number; rows?: number }> = {
+      name: { kind: 'input', max: 120 },
+      description: { kind: 'textarea', max: 500, rows: 3 },
+      why: { kind: 'textarea', max: 3000, rows: 6 },
+      status: { kind: 'select' },
+      startDate: { kind: 'date' },
+    };
+    const STATUSES = ['idea', 'dev', 'review', 'delivered'];
+
+    function enableVaultEditing(token: string, folder: string) {
+      const indexPath = `projects/${folder}/index.md`;
+      const patchVault = async (mutate: (metadata: Record<string, unknown>) => void, message: string) => {
+        const { sha, text } = await getVaultFile(token, indexPath);
+        const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
+        if (!match) throw new Error('index.md is missing YAML front matter.');
+        const metadata = { ...(parse(match[1]) as Record<string, unknown>) };
+        mutate(metadata);
+        metadata.updatedDate = new Date().toISOString().slice(0, 10);
+        const body = text.slice(match[0].length).replace(/^\r?\n/, '');
+        const next = `---\n${stringify(metadata, { lineWidth: 0 }).trimEnd()}\n---\n${body ? `\n${body}` : ''}`;
+        await putVaultFile(token, indexPath, encodeText(next), message, sha);
+      };
+
+      const displayFor = (field: string) =>
+        field === 'why' ? whyEl : document.querySelector<HTMLElement>(`[data-field-display="${field}"]`);
+
+      for (const [field, spec] of Object.entries(VAULT_FIELDS)) {
+        const display = displayFor(field);
+        const wrapper = display?.closest('.inline-editable') ?? display?.parentElement;
+        if (!display || !wrapper || wrapper.querySelector('.inline-edit')) continue;
+        wrapper.classList.add('inline-editable');
+        const pencil = document.createElement('button');
+        pencil.type = 'button';
+        pencil.className = 'inline-edit';
+        pencil.setAttribute('aria-label', `Edit the ${field}`);
+        pencil.innerHTML = PENCIL;
+        wrapper.append(pencil);
+
+        pencil.addEventListener('click', () => {
+          if (document.querySelector('.inline-editor')) return;
+          const current = display.dataset.value ?? display.textContent?.trim() ?? '';
+          const editor = document.createElement('div');
+          editor.className = 'inline-editor';
+          let control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+          if (spec.kind === 'textarea') {
+            const textarea = document.createElement('textarea');
+            textarea.rows = spec.rows ?? 4;
+            textarea.maxLength = spec.max ?? 3000;
+            textarea.value = current;
+            control = textarea;
+          } else if (spec.kind === 'select') {
+            const select = document.createElement('select');
+            for (const value of STATUSES) {
+              const option = document.createElement('option');
+              option.value = value;
+              option.textContent = value;
+              option.selected = value === current;
+              select.append(option);
+            }
+            control = select;
+          } else {
+            const input = document.createElement('input');
+            input.type = spec.kind === 'date' ? 'date' : 'text';
+            if (spec.max) input.maxLength = spec.max;
+            input.value = current;
+            control = input;
+          }
+          const save = document.createElement('button');
+          save.type = 'button';
+          save.className = 'inline-editor__save';
+          save.textContent = 'Save';
+          const cancel = document.createElement('button');
+          cancel.type = 'button';
+          cancel.className = 'inline-editor__cancel';
+          cancel.textContent = 'Cancel';
+          const note = document.createElement('span');
+          note.className = 'inline-editor__note';
+          const actions = document.createElement('div');
+          actions.className = 'inline-editor__actions';
+          actions.append(save, cancel, note);
+          editor.append(control, actions);
+          display.hidden = true;
+          pencil.hidden = true;
+          display.insertAdjacentElement('afterend', editor);
+          control.focus();
+
+          const closeEditor = () => { editor.remove(); display.hidden = false; pencil.hidden = false; };
+          cancel.addEventListener('click', closeEditor);
+          save.addEventListener('click', async () => {
+            const value = control.value.trim();
+            if (!value) { note.textContent = 'A value is required.'; return; }
+            if (spec.kind === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) { note.textContent = 'Use a valid date.'; return; }
+            save.disabled = true;
+            note.textContent = 'Committing…';
+            try {
+              await patchVault((metadata) => { metadata[field] = value; }, `Update private ${field}`);
+              if (field === 'status') {
+                display.dataset.value = value;
+                display.textContent = value;
+                const badge = document.querySelector<HTMLElement>('.status-badge');
+                if (badge) { badge.className = `status-badge status-badge--${value}`; badge.textContent = value; }
+              } else if (field === 'startDate') {
+                display.dataset.value = value;
+                display.textContent = new Date(`${value}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+              } else {
+                display.textContent = value;
+              }
+              closeEditor();
+              status.textContent = 'Saved to the private vault.';
+            } catch (error) {
+              note.textContent = (error as Error).message || 'The commit failed.';
+              save.disabled = false;
+            }
+          });
+        });
+      }
+    }
 
     wireTokenPanel(root, (token) => { void unlock(token); });
   }
