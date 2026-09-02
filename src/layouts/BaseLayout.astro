@@ -102,11 +102,18 @@ const CARD = {
         </p>
         <input type="password" class="token-dialog__input" data-token-dialog-input autocomplete="off" placeholder="github_pat_…" />
         <p class="remote-editor-hint token-dialog__ai-hint">
-          <strong>AI drafts (optional):</strong> paste an Anthropic API key from
-          <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">console.anthropic.com ↗</a>
-          to enable the AI button in the description and why editors.
+          <strong>AI drafts (optional):</strong> paste an
+          <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">Anthropic ↗</a>
+          (<code>sk-ant-…</code>) or
+          <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">OpenAI ↗</a>
+          (<code>sk-…</code>) API key — the provider is detected automatically.
         </p>
-        <input type="password" class="token-dialog__input" data-anthropic-key-input autocomplete="off" placeholder="sk-ant-…" />
+        <input type="password" class="token-dialog__input" data-anthropic-key-input autocomplete="off" placeholder="sk-ant-… or sk-…" />
+        <p class="remote-editor-hint token-dialog__ai-hint">
+          OpenAI keys additionally need the repo's <code>proxy/openai-worker.js</code> deployed on Cloudflare Workers
+          (OpenAI blocks direct browser calls) — paste the worker URL here. Anthropic keys need no proxy.
+        </p>
+        <input type="url" class="token-dialog__input" data-openai-proxy-input autocomplete="off" placeholder="https://your-worker.workers.dev (OpenAI keys only)" />
         <p class="share-dialog__url" data-token-dialog-status></p>
         <div class="share-dialog__actions">
           <button type="button" class="share-dialog__native" data-token-dialog-save>Connect</button>
@@ -166,7 +173,7 @@ const CARD = {
     <script>
       import QRCode from 'qrcode';
       import { TOKEN_EVENT, clearToken, getStoredToken, storeToken, validateToken } from '../lib/github-client';
-      import { clearAnthropicKey, getStoredAnthropicKey, storeAnthropicKey } from '../lib/ai-complete';
+      import { clearAnthropicKey, clearOpenAiProxy, getStoredAnthropicKey, getStoredOpenAiProxy, storeAnthropicKey, storeOpenAiProxy } from '../lib/ai-complete';
 
       // --- header GitHub connection icon + token dialog (hosted builds only) ---
       const tokenIcon = document.querySelector<HTMLButtonElement>('[data-token-open]');
@@ -194,9 +201,11 @@ const CARD = {
         tokenIcon.addEventListener('click', () => { status.textContent = ''; tokenDialog.showModal(); });
         tokenDialog.querySelector('[data-token-dialog-close]')?.addEventListener('click', () => tokenDialog.close());
         tokenDialog.addEventListener('click', (event) => { if (event.target === tokenDialog) tokenDialog.close(); });
-        forgetButton.addEventListener('click', () => { clearToken(); clearAnthropicKey(); status.textContent = 'Token and AI key forgotten.'; });
+        forgetButton.addEventListener('click', () => { clearToken(); clearAnthropicKey(); clearOpenAiProxy(); status.textContent = 'Token, AI key, and proxy forgotten.'; });
         const anthropicInput = tokenDialog.querySelector<HTMLInputElement>('[data-anthropic-key-input]')!;
-        anthropicInput.placeholder = getStoredAnthropicKey() ? 'AI key saved — paste to replace' : 'sk-ant-…';
+        anthropicInput.placeholder = getStoredAnthropicKey() ? 'AI key saved — paste to replace' : 'sk-ant-… or sk-…';
+        const proxyInput = tokenDialog.querySelector<HTMLInputElement>('[data-openai-proxy-input]')!;
+        if (getStoredOpenAiProxy()) proxyInput.placeholder = 'Proxy saved — paste to replace';
         tokenDialog.querySelector('[data-token-dialog-save]')?.addEventListener('click', async () => {
           const candidate = input.value.trim();
           const anthropicCandidate = anthropicInput.value.trim();
@@ -204,6 +213,12 @@ const CARD = {
             storeAnthropicKey(anthropicCandidate);
             anthropicInput.value = '';
             anthropicInput.placeholder = 'AI key saved — paste to replace';
+          }
+          const proxyCandidate = proxyInput.value.trim();
+          if (proxyCandidate) {
+            storeOpenAiProxy(proxyCandidate);
+            proxyInput.value = '';
+            proxyInput.placeholder = 'Proxy saved — paste to replace';
           }
           if (!candidate) {
             status.textContent = anthropicCandidate ? 'AI key saved.' : 'Paste a token first.';
