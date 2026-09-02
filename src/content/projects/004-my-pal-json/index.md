@@ -3,7 +3,7 @@ id: "004"
 slug: my-pal-json
 name: My Pal JSON
 description: A browser-based JSON and API workbench for sending requests, inspecting structures, formatting payloads, and generating models in six languages.
-why: The project consolidates common API exploration tasks into one lightweight browser workspace, reducing the need to move JSON between separate request, formatting, structure-inspection, and model-generation tools.
+why: I built this project to eliminate the friction of context-switching between multiple tools when working with APIs—I found myself constantly moving JSON between my request client, a formatter, a structure inspector, and code generators. My Pal JSON consolidates all of these workflows into a single lightweight browser workspace, so I can send API requests, analyze responses, explore JSON structure, and generate code models without leaving the application. This unified approach saves time and keeps my focus on the actual API exploration rather than tool management.
 status: delivered
 privacy: public
 startDate: 2024-10-03
