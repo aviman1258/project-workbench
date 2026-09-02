@@ -1781,6 +1781,27 @@ a {
   color: var(--red);
 }
 
+.inline-editable {
+  position: relative;
+}
+
+/* pencils only appear while connected to GitHub; [hidden] must still win */
+body:not([data-github-connected='true']) .inline-edit,
+.inline-edit[hidden] {
+  display: none;
+}
+
+.inline-editable > [data-field-display] {
+  padding-right: 42px;
+}
+
+.inline-editable > .inline-edit {
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin-left: 0;
+}
+
 .inline-edit {
   width: 30px;
   height: 30px;

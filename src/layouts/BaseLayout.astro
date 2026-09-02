@@ -118,6 +118,8 @@ const avatar = withBase('/profile-avatar-circle.png');
           tokenIcon.title = connected ? 'GitHub connected' : 'Not connected to GitHub — click to add a token';
           stateLabel.textContent = connected ? 'Connected — edits commit as aviman1258.' : 'Not connected. Editing needs a token.';
           forgetButton.hidden = !connected;
+          // editing affordances (pencils) only show while connected
+          document.body.dataset.githubConnected = String(connected);
         };
         refresh();
         window.addEventListener(TOKEN_EVENT, refresh);

@@ -36,10 +36,14 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
     <header class="project-hero">
       <div class="project-hero__main">
         <div class="project-hero__topline"><span class="project-id">{data.id}</span><StatusBadge status={data.status} /></div>
-        <h1 data-field-display="name">{data.name}</h1>
-        {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="name" aria-label="Edit the name" set:html={pencil} />}
-        <p data-field-display="description">{data.description}</p>
-        {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="description" aria-label="Edit the description" set:html={pencil} />}
+        <div class="inline-editable">
+          <h1 data-field-display="name">{data.name}</h1>
+          {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="name" aria-label="Edit the name" set:html={pencil} />}
+        </div>
+        <div class="inline-editable">
+          <p data-field-display="description">{data.description}</p>
+          {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="description" aria-label="Edit the description" set:html={pencil} />}
+        </div>
       </div>
       <aside class={`confidentiality-card confidentiality-card--${data.privacy}`}>
         <span class="confidentiality-card__icon" aria-hidden="true">◆</span>
@@ -48,12 +52,12 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
     </header>
 
     <dl class="metadata-strip">
-      <div>
+      <div class="inline-editable">
         <dt>Status</dt>
         <dd data-field-display="status" data-value={data.status}>{formatLabel(data.status)}</dd>
         {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="status" aria-label="Edit the status" set:html={pencil} />}
       </div>
-      <div>
+      <div class="inline-editable">
         <dt>Started</dt>
         <dd data-field-display="startDate" data-value={data.startDate.toISOString().slice(0, 10)}><time datetime={data.startDate.toISOString()}>{formatDate(data.startDate)}</time></dd>
         {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="startDate" aria-label="Edit the start date" set:html={pencil} />}
@@ -114,8 +118,11 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
     {!lockedView && (
     <article class="case-study" id="overview">
       <div class="section-kicker"><span>01</span> Overview</div>
-      <div class="section-heading section-heading--detail"><div><h2>Why it was built {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="why" aria-label="Edit why it was built" set:html={pencil} />}</h2></div></div>
-      <div class="prose"><p data-field-display="why">{data.why}</p></div>
+      <div class="section-heading section-heading--detail"><div><h2>Why it was built</h2></div></div>
+      <div class="prose inline-editable">
+        <p data-field-display="why">{data.why}</p>
+        {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="why" aria-label="Edit why it was built" set:html={pencil} />}
+      </div>
     </article>
     )}
 
