@@ -52,22 +52,22 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
     </header>
 
     <dl class="metadata-strip">
-      <div class="inline-editable">
+      <div>
         <dt>Status</dt>
-        <dd data-field-display="status" data-value={data.status}>{formatLabel(data.status)}</dd>
-        {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="status" aria-label="Edit the status" set:html={pencil} />}
+        <dd class="inline-editable">
+          <span data-field-display="status" data-value={data.status}>{formatLabel(data.status)}</span>
+          {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="status" aria-label="Edit the status" set:html={pencil} />}
+        </dd>
       </div>
-      <div class="inline-editable">
+      <div>
         <dt>Started</dt>
-        <dd data-field-display="startDate" data-value={data.startDate.toISOString().slice(0, 10)}><time datetime={data.startDate.toISOString()}>{formatDate(data.startDate)}</time></dd>
-        {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="startDate" aria-label="Edit the start date" set:html={pencil} />}
+        <dd class="inline-editable">
+          <span data-field-display="startDate" data-value={data.startDate.toISOString().slice(0, 10)}><time datetime={data.startDate.toISOString()}>{formatDate(data.startDate)}</time></span>
+          {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="startDate" aria-label="Edit the start date" set:html={pencil} />}
+        </dd>
       </div>
       <div><dt>Updated</dt><dd><time datetime={data.updatedDate.toISOString()}>{formatDate(data.updatedDate)}</time></dd></div>
     </dl>
-
-    {!lockedView && (
-    <nav class="section-nav" aria-label="Project sections"><a href="#overview">Overview</a><a href="#artifacts">Artifacts <span>{artifacts.length}</span></a></nav>
-    )}
 
     {lockedView && <PrivateVault id={data.id} />}
 
@@ -117,7 +117,6 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
 
     {!lockedView && (
     <article class="case-study" id="overview">
-      <div class="section-kicker"><span>01</span> Overview</div>
       <div class="section-heading section-heading--detail"><div><h2>Why it was built</h2></div></div>
       <div class="prose inline-editable">
         <p data-field-display="why">{data.why}</p>
@@ -128,7 +127,6 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
 
     {!lockedView && (
     <section class="artifacts-section" id="artifacts" {...(publicOnlyBuild ? {} : { 'data-media-section': true, 'data-project-slug': data.slug })}>
-      <div class="section-kicker"><span>02</span> Supporting artifacts</div>
       <div class="section-heading section-heading--detail">
         <div>
           <h2>Evidence from the work</h2>

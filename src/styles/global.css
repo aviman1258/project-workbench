@@ -1781,8 +1781,12 @@ a {
   color: var(--red);
 }
 
+/* the wrapper shrinks to the text so the pencil hangs off the text's own
+   top-right corner instead of the page edge */
 .inline-editable {
   position: relative;
+  width: fit-content;
+  max-width: 100%;
 }
 
 /* pencils only appear while connected to GitHub; [hidden] must still win */
@@ -1791,14 +1795,10 @@ body:not([data-github-connected='true']) .inline-edit,
   display: none;
 }
 
-.inline-editable > [data-field-display] {
-  padding-right: 42px;
-}
-
 .inline-editable > .inline-edit {
   position: absolute;
-  top: 0;
-  right: 0;
+  top: -10px;
+  right: -38px;
   margin-left: 0;
 }
 
