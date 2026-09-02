@@ -135,6 +135,7 @@ export function wireTokenPanel(root: HTMLElement, onChange: (token: string) => v
   const apply = () => {
     forget.hidden = !token;
     label.textContent = token ? 'GitHub connected' : 'Connect GitHub to edit';
+    panel.dataset.connected = String(Boolean(token));
     if (token) panel.open = false;
     onChange(token);
   };
