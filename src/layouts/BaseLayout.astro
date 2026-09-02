@@ -107,6 +107,8 @@ const avatar = withBase('/profile-avatar-circle.png');
       const tokenIcon = document.querySelector<HTMLButtonElement>('[data-token-open]');
       const tokenDialog = document.querySelector<HTMLDialogElement>('[data-token-dialog]');
       if (tokenIcon && tokenDialog) {
+        // ask the browser not to evict this site's storage (where the token lives)
+        try { void navigator.storage?.persist?.(); } catch { /* older browsers */ }
         const stateLabel = tokenDialog.querySelector<HTMLElement>('[data-token-dialog-state]')!;
         const input = tokenDialog.querySelector<HTMLInputElement>('[data-token-dialog-input]')!;
         const status = tokenDialog.querySelector<HTMLElement>('[data-token-dialog-status]')!;
