@@ -19,8 +19,18 @@ const CARD = {
   name: 'Avishek Chandra',
   email: 'achandra1258@gmail.com',
   phone: '720-320-2111',
-  // Fill from Credly: { name, issuer, href } per certification.
-  certifications: [] as { name: string; issuer: string; href: string }[],
+  certifications: [
+    {
+      name: 'AWS Certified Cloud Practitioner',
+      issuer: 'Amazon Web Services',
+      href: 'https://www.credly.com/users/avishek-chandra.d94e59c9',
+    },
+    {
+      name: 'Datadog Certified: Datadog Fundamentals',
+      issuer: 'Datadog',
+      href: 'https://www.credly.com/users/avishek-chandra.d94e59c9',
+    },
+  ] as { name: string; issuer: string; href: string }[],
 };
 ---
 
@@ -42,15 +52,15 @@ const CARD = {
   <body>
     <header class="site-header">
       <div class="site-header__inner">
-        <div class="brand">
-          <button type="button" class="brand__mark brand__mark--button" data-card-open aria-label={`Contact card for ${CARD.name}`} title="Contact card">
+        <button type="button" class="brand brand--button" data-card-open aria-label={`Contact card for ${CARD.name}`} title="Contact card">
+          <span class="brand__mark" aria-hidden="true">
             <img src={avatar} alt="" />
-          </button>
-          <a class="brand__home" href={withBase('/')} aria-label="Avishek's Portfolio home">
+          </span>
+          <span class="brand__text">
             <strong>Avishek's Portfolio</strong>
             <small>{publicOnlyBuild ? 'Project workbench' : 'Local workspace'}</small>
-          </a>
-        </div>
+          </span>
+        </button>
         <div class="site-actions">
           <button type="button" class="site-action site-action--share" data-share-open>
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"></path></svg>

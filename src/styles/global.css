@@ -108,21 +108,27 @@ a {
   box-shadow: 0 2px 8px rgb(24 43 36 / 14%);
 }
 
-.brand__mark--button {
+.brand--button {
   padding: 0;
+  border: none;
+  background: none;
   cursor: pointer;
-  transition: transform 150ms ease, box-shadow 150ms ease;
+  text-align: left;
+  font: inherit;
 }
 
-.brand__mark--button:hover,
-.brand__mark--button:focus-visible {
+.brand--button:hover .brand__mark,
+.brand--button:focus-visible .brand__mark {
   transform: scale(1.08);
   box-shadow: 0 3px 12px rgb(24 43 36 / 26%);
 }
 
-.brand__home {
+.brand__mark {
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.brand__text {
   color: var(--ink);
-  text-decoration: none;
   line-height: 1.2;
 }
 
