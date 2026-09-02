@@ -1,9 +1,8 @@
 ---
-import GitHubConnect from './GitHubConnect.astro';
-
-// Locked view of a private project on the hosted site. The build only knows the
-// project's id and dates; everything else lives in the private vault repo and is
-// fetched client-side after the viewer connects an authorized GitHub token.
+// Private project on the hosted site. The build only knows the project's id and
+// dates; the real content lives in the private vault repo and is fetched
+// client-side using the GitHub token from the header connection. Once unlocked,
+// the same modal field editors appear — saves commit to the vault repo.
 interface Props {
   id: string;
 }
@@ -11,20 +10,16 @@ interface Props {
 const { id } = Astro.props;
 ---
 
-<section class="project-editor private-vault" aria-labelledby="private-vault-title" data-private-vault data-vault-id={id}>
-  <div class="project-editor__intro">
-    <div><p class="eyebrow">Private project</p><h2 id="private-vault-title">Locked</h2></div>
-    <p>The write-up and media live in a private repository. Connect GitHub with an authorized account to view them here.</p>
-  </div>
-
-  <div class="project-editor__tools">
-    <GitHubConnect />
-    <p class="form-status" data-vault-status aria-live="polite"></p>
-  </div>
+<section class="project-editor private-vault" data-private-vault data-vault-id={id}>
+  <p class="form-status" data-vault-status aria-live="polite">
+    This project is private. Connect GitHub with the icon in the header to view it.
+  </p>
 
   <article class="vault-content" data-vault-content hidden>
     <div class="section-heading section-heading--detail"><div><h2>Why it was built</h2></div></div>
-    <div class="prose"><p data-vault-why></p></div>
+    <div class="prose inline-editable">
+      <p data-vault-why></p>
+    </div>
 
     <div class="vault-media" data-vault-media></div>
   </article>
@@ -32,7 +27,9 @@ const { id } = Astro.props;
 
 <script>
   import { parse, stringify } from 'yaml';
-  import { encodeText, findVaultFolder, getVaultFile, getVaultText, getVaultBlobUrl, listVaultArtifacts, putVaultFile, wireTokenPanel } from '../lib/github-client';
+  import { TOKEN_EVENT, encodeText, findVaultFolder, getStoredToken, getVaultFile, getVaultText, getVaultBlobUrl, listVaultArtifacts, putVaultFile } from '../lib/github-client';
+  import { openFieldEditor } from '../lib/field-editor';
+  import { aiComplete, gatherRepoContext } from '../lib/ai-complete';
 
   const root = document.querySelector<HTMLElement>('[data-private-vault]');
   if (root) {
@@ -59,13 +56,26 @@ const { id } = Astro.props;
         const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
         const metadata = match ? (parse(match[1]) as Record<string, unknown>) : {};
 
-        // reveal the real name and description in the hero
         const hero = document.querySelector('.project-hero__main');
         const title = hero?.querySelector('h1');
         const description = hero?.querySelector('p');
         if (title && typeof metadata.name === 'string') title.textContent = metadata.name;
         if (description && typeof metadata.description === 'string') description.textContent = metadata.description;
         whyEl.textContent = typeof metadata.why === 'string' ? metadata.why : '';
+        for (const field of ['repositoryUrl', 'pullRequestUrl']) {
+          const display = document.querySelector<HTMLElement>(`[data-field-display="${field}"]`);
+          const value = typeof metadata[field] === 'string' ? (metadata[field] as string) : '';
+          if (display && value) {
+            display.dataset.value = value;
+            display.replaceChildren();
+            const link = document.createElement('a');
+            link.href = value;
+            link.target = '_blank';
+            link.rel = 'noreferrer';
+            link.textContent = value.replace(/^https:\/\/(www\.)?/, '');
+            display.append(link);
+          }
+        }
 
         content.hidden = false;
         status.textContent = 'Loading media…';
@@ -106,7 +116,7 @@ const { id } = Astro.props;
           empty.textContent = 'No media attached to this project.';
           mediaEl.append(empty);
         }
-        status.textContent = 'Unlocked.';
+        status.textContent = '';
         loaded = true;
         enableVaultEditing(token, folder);
       } catch (error) {
@@ -114,14 +124,16 @@ const { id } = Astro.props;
       }
     };
 
-    // --- inline editing after unlock: pencils that commit to the vault repo ---
+    // --- editing after unlock: pencils opening the shared modal, committing to the vault ---
     const PENCIL = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>`;
-    const VAULT_FIELDS: Record<string, { kind: 'input' | 'textarea' | 'select' | 'date'; max?: number; rows?: number }> = {
-      name: { kind: 'input', max: 120 },
-      description: { kind: 'textarea', max: 500, rows: 3 },
-      why: { kind: 'textarea', max: 3000, rows: 6 },
-      status: { kind: 'select' },
-      startDate: { kind: 'date' },
+    const VAULT_FIELDS: Record<string, { kind: 'input' | 'textarea' | 'status' | 'date' | 'url'; label: string; max?: number; rows?: number }> = {
+      name: { kind: 'input', label: 'name', max: 120 },
+      description: { kind: 'textarea', label: 'description', max: 500, rows: 4 },
+      why: { kind: 'textarea', label: 'why it was built', max: 3000, rows: 8 },
+      status: { kind: 'status', label: 'status' },
+      startDate: { kind: 'date', label: 'start date' },
+      repositoryUrl: { kind: 'url', label: 'repository link' },
+      pullRequestUrl: { kind: 'url', label: 'pull request link' },
     };
     const STATUSES = ['idea', 'dev', 'review', 'delivered'];
 
@@ -134,6 +146,9 @@ const { id } = Astro.props;
         const metadata = { ...(parse(match[1]) as Record<string, unknown>) };
         mutate(metadata);
         metadata.updatedDate = new Date().toISOString().slice(0, 10);
+        for (const key of Object.keys(metadata)) {
+          if (metadata[key] === undefined) delete metadata[key];
+        }
         const body = text.slice(match[0].length).replace(/^\r?\n/, '');
         const next = `---\n${stringify(metadata, { lineWidth: 0 }).trimEnd()}\n---\n${body ? `\n${body}` : ''}`;
         await putVaultFile(token, indexPath, encodeText(next), message, sha);
@@ -141,6 +156,10 @@ const { id } = Astro.props;
 
       const displayFor = (field: string) =>
         field === 'why' ? whyEl : document.querySelector<HTMLElement>(`[data-field-display="${field}"]`);
+      const currentValue = (field: string) => {
+        const display = displayFor(field);
+        return display?.dataset.value ?? display?.textContent?.trim() ?? '';
+      };
 
       for (const [field, spec] of Object.entries(VAULT_FIELDS)) {
         const display = displayFor(field);
@@ -150,90 +169,63 @@ const { id } = Astro.props;
         const pencil = document.createElement('button');
         pencil.type = 'button';
         pencil.className = 'inline-edit';
-        pencil.setAttribute('aria-label', `Edit the ${field}`);
+        pencil.setAttribute('aria-label', `Edit the ${spec.label}`);
         pencil.innerHTML = PENCIL;
         wrapper.append(pencil);
 
         pencil.addEventListener('click', () => {
-          if (document.querySelector('.inline-editor')) return;
-          const current = display.dataset.value ?? display.textContent?.trim() ?? '';
-          const editor = document.createElement('div');
-          editor.className = 'inline-editor';
-          let control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
-          if (spec.kind === 'textarea') {
-            const textarea = document.createElement('textarea');
-            textarea.rows = spec.rows ?? 4;
-            textarea.maxLength = spec.max ?? 3000;
-            textarea.value = current;
-            control = textarea;
-          } else if (spec.kind === 'select') {
-            const select = document.createElement('select');
-            for (const value of STATUSES) {
-              const option = document.createElement('option');
-              option.value = value;
-              option.textContent = value;
-              option.selected = value === current;
-              select.append(option);
-            }
-            control = select;
-          } else {
-            const input = document.createElement('input');
-            input.type = spec.kind === 'date' ? 'date' : 'text';
-            if (spec.max) input.maxLength = spec.max;
-            input.value = current;
-            control = input;
-          }
-          const save = document.createElement('button');
-          save.type = 'button';
-          save.className = 'inline-editor__save';
-          save.textContent = 'Save';
-          const cancel = document.createElement('button');
-          cancel.type = 'button';
-          cancel.className = 'inline-editor__cancel';
-          cancel.textContent = 'Cancel';
-          const note = document.createElement('span');
-          note.className = 'inline-editor__note';
-          const actions = document.createElement('div');
-          actions.className = 'inline-editor__actions';
-          actions.append(save, cancel, note);
-          editor.append(control, actions);
-          display.hidden = true;
-          pencil.hidden = true;
-          display.insertAdjacentElement('afterend', editor);
-          control.focus();
-
-          const closeEditor = () => { editor.remove(); display.hidden = false; pencil.hidden = false; };
-          cancel.addEventListener('click', closeEditor);
-          save.addEventListener('click', async () => {
-            const value = control.value.trim();
-            if (!value) { note.textContent = 'A value is required.'; return; }
-            if (spec.kind === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) { note.textContent = 'Use a valid date.'; return; }
-            save.disabled = true;
-            note.textContent = 'Committing…';
-            try {
-              await patchVault((metadata) => { metadata[field] = value; }, `Update private ${field}`);
+          const hasRepo = Boolean(currentValue('repositoryUrl'));
+          const supportsAi = (field === 'description' || field === 'why') && Boolean(currentValue('repositoryUrl') || currentValue('pullRequestUrl'));
+          openFieldEditor({
+            spec,
+            current: currentValue(field),
+            statuses: field === 'status' ? (hasRepo ? STATUSES : ['idea']) : undefined,
+            statusNote: field === 'status' && !hasRepo ? 'Add a repository link to move this project beyond Idea.' : undefined,
+            aiComplete: supportsAi
+              ? async (existing) => {
+                  const context = await gatherRepoContext(token, currentValue('repositoryUrl'), currentValue('pullRequestUrl'));
+                  return aiComplete({ field: field as 'description' | 'why', existing, projectName: currentValue('name'), context });
+                }
+              : undefined,
+            onApply: async (value) => {
+              await patchVault((metadata) => {
+                if ((field === 'repositoryUrl' || field === 'pullRequestUrl') && !value) delete metadata[field];
+                else metadata[field] = value;
+                if (field === 'repositoryUrl' && !value) metadata.status = 'idea';
+              }, `Update private ${spec.label}`);
               if (field === 'status') {
                 display.dataset.value = value;
-                display.textContent = value;
+                display.textContent = value.replaceAll('-', ' ');
                 const badge = document.querySelector<HTMLElement>('.status-badge');
-                if (badge) { badge.className = `status-badge status-badge--${value}`; badge.textContent = value; }
+                if (badge) { badge.className = `status-badge status-badge--${value}`; badge.textContent = value.replaceAll('-', ' '); }
               } else if (field === 'startDate') {
                 display.dataset.value = value;
                 display.textContent = new Date(`${value}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+              } else if (field === 'repositoryUrl' || field === 'pullRequestUrl') {
+                display.dataset.value = value;
+                display.replaceChildren();
+                if (value) {
+                  const link = document.createElement('a');
+                  link.href = value;
+                  link.target = '_blank';
+                  link.rel = 'noreferrer';
+                  link.textContent = value.replace(/^https:\/\/(www\.)?/, '');
+                  display.append(link);
+                } else {
+                  display.textContent = '—';
+                }
               } else {
                 display.textContent = value;
               }
-              closeEditor();
               status.textContent = 'Saved to the private vault.';
-            } catch (error) {
-              note.textContent = (error as Error).message || 'The commit failed.';
-              save.disabled = false;
-            }
+            },
           });
         });
       }
     }
 
-    wireTokenPanel(root, (token) => { void unlock(token); });
+    // unlock straight from the header connection — no separate panel here
+    void unlock(getStoredToken());
+    window.addEventListener(TOKEN_EVENT, () => void unlock(getStoredToken()));
   }
 </script>

@@ -241,6 +241,8 @@ async function updateProject(projectsRoot: string, slug: string, rawInput: unkno
     updatedDate: new Date().toISOString().slice(0, 10),
     ...(existing.artifactOrder !== undefined ? { artifactOrder: existing.artifactOrder } : {}),
     ...(existing.featuredArtifact !== undefined ? { featuredArtifact: existing.featuredArtifact } : {}),
+    ...(existing.repositoryUrl !== undefined ? { repositoryUrl: existing.repositoryUrl } : {}),
+    ...(existing.pullRequestUrl !== undefined ? { pullRequestUrl: existing.pullRequestUrl } : {}),
   };
 
   projectMetadataSchema.parse(metadata);

@@ -2031,6 +2031,107 @@ body:not([data-github-connected='true']) .inline-edit,
   font-size: 12.5px;
 }
 
+.field-editor {
+  width: min(92vw, 560px);
+  text-align: left;
+}
+
+.field-editor h3 {
+  text-align: left;
+  font-size: 1.35rem;
+}
+
+.field-editor__control {
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: 15px/1.55 var(--sans);
+  resize: vertical;
+}
+
+.field-editor__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 6px 0;
+}
+
+.field-editor__pill {
+  border: 2px solid transparent;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 8px 16px;
+  opacity: 0.55;
+  transition: opacity 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.field-editor__pill[data-selected='true'] {
+  opacity: 1;
+  border-color: var(--ink);
+  transform: scale(1.05);
+}
+
+.field-editor__hint {
+  margin: 8px 0 0;
+  color: var(--ink-faint);
+  font-size: 12.5px;
+}
+
+.field-editor__ai {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.field-editor__ai-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--ochre);
+  border-radius: 999px;
+  background: var(--ochre-light);
+  color: var(--ochre);
+  font: 600 12.5px/1 var(--sans);
+  padding: 9px 15px;
+  cursor: pointer;
+}
+
+.field-editor__ai-button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.field-editor__ai-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.field-editor__ai-undo {
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 12.5px/1 var(--sans);
+  padding: 9px 15px;
+  cursor: pointer;
+}
+
+.field-editor__status {
+  min-height: 18px;
+  margin: 12px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.field-editor .share-dialog__actions {
+  margin-top: 14px;
+  justify-content: flex-end;
+}
+
 .share-dialog {
   max-width: min(92vw, 520px);
   padding: 28px;

@@ -101,6 +101,12 @@ const CARD = {
           <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">Create one on GitHub ↗</a>
         </p>
         <input type="password" class="token-dialog__input" data-token-dialog-input autocomplete="off" placeholder="github_pat_…" />
+        <p class="remote-editor-hint token-dialog__ai-hint">
+          <strong>AI drafts (optional):</strong> paste an Anthropic API key from
+          <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">console.anthropic.com ↗</a>
+          to enable the AI button in the description and why editors.
+        </p>
+        <input type="password" class="token-dialog__input" data-anthropic-key-input autocomplete="off" placeholder="sk-ant-…" />
         <p class="share-dialog__url" data-token-dialog-status></p>
         <div class="share-dialog__actions">
           <button type="button" class="share-dialog__native" data-token-dialog-save>Connect</button>
@@ -160,6 +166,7 @@ const CARD = {
     <script>
       import QRCode from 'qrcode';
       import { TOKEN_EVENT, clearToken, getStoredToken, storeToken, validateToken } from '../lib/github-client';
+      import { clearAnthropicKey, getStoredAnthropicKey, storeAnthropicKey } from '../lib/ai-complete';
 
       // --- header GitHub connection icon + token dialog (hosted builds only) ---
       const tokenIcon = document.querySelector<HTMLButtonElement>('[data-token-open]');
@@ -187,16 +194,27 @@ const CARD = {
         tokenIcon.addEventListener('click', () => { status.textContent = ''; tokenDialog.showModal(); });
         tokenDialog.querySelector('[data-token-dialog-close]')?.addEventListener('click', () => tokenDialog.close());
         tokenDialog.addEventListener('click', (event) => { if (event.target === tokenDialog) tokenDialog.close(); });
-        forgetButton.addEventListener('click', () => { clearToken(); status.textContent = 'Token forgotten.'; });
+        forgetButton.addEventListener('click', () => { clearToken(); clearAnthropicKey(); status.textContent = 'Token and AI key forgotten.'; });
+        const anthropicInput = tokenDialog.querySelector<HTMLInputElement>('[data-anthropic-key-input]')!;
+        anthropicInput.placeholder = getStoredAnthropicKey() ? 'AI key saved — paste to replace' : 'sk-ant-…';
         tokenDialog.querySelector('[data-token-dialog-save]')?.addEventListener('click', async () => {
           const candidate = input.value.trim();
-          if (!candidate) { status.textContent = 'Paste a token first.'; return; }
+          const anthropicCandidate = anthropicInput.value.trim();
+          if (anthropicCandidate) {
+            storeAnthropicKey(anthropicCandidate);
+            anthropicInput.value = '';
+            anthropicInput.placeholder = 'AI key saved — paste to replace';
+          }
+          if (!candidate) {
+            status.textContent = anthropicCandidate ? 'AI key saved.' : 'Paste a token first.';
+            return;
+          }
           status.textContent = 'Checking access…';
           try {
             await validateToken(candidate);
             storeToken(candidate);
             input.value = '';
-            status.textContent = 'Connected.';
+            status.textContent = anthropicCandidate ? 'Connected, AI key saved.' : 'Connected.';
           } catch (error) {
             status.textContent = (error as Error).message || 'That token did not work.';
           }

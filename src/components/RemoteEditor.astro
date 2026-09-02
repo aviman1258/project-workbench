@@ -21,6 +21,8 @@ const { folder } = Astro.props;
 <script>
   import { parse, stringify } from 'yaml';
   import { TOKEN_EVENT, encodeText, getFile, getStoredToken, putFile, deleteFile } from '../lib/github-client';
+  import { openFieldEditor } from '../lib/field-editor';
+  import { aiComplete, gatherRepoContext } from '../lib/ai-complete';
 
   const root = document.querySelector<HTMLElement>('[data-remote-editor]');
   if (root) {
@@ -71,13 +73,15 @@ const { folder } = Astro.props;
       }
     };
 
-    // --- inline field editing (pencil buttons) ---
-    const FIELDS: Record<string, { kind: 'input' | 'textarea' | 'select' | 'date'; max?: number; rows?: number }> = {
-      name: { kind: 'input', max: 120 },
-      description: { kind: 'textarea', max: 500, rows: 3 },
-      why: { kind: 'textarea', max: 3000, rows: 6 },
-      status: { kind: 'select' },
-      startDate: { kind: 'date' },
+    // --- inline field editing via themed modals ---
+    const FIELDS: Record<string, { kind: 'input' | 'textarea' | 'status' | 'date' | 'url'; label: string; max?: number; rows?: number }> = {
+      name: { kind: 'input', label: 'name', max: 120 },
+      description: { kind: 'textarea', label: 'description', max: 500, rows: 4 },
+      why: { kind: 'textarea', label: 'why it was built', max: 3000, rows: 8 },
+      status: { kind: 'status', label: 'status' },
+      startDate: { kind: 'date', label: 'start date' },
+      repositoryUrl: { kind: 'url', label: 'repository link' },
+      pullRequestUrl: { kind: 'url', label: 'pull request link' },
     };
     const displayFor = (field: string) => document.querySelector<HTMLElement>(`[data-field-display="${field}"]`);
     const currentValue = (field: string) => {
@@ -99,6 +103,19 @@ const { folder } = Astro.props;
       } else if (field === 'startDate') {
         display.dataset.value = value;
         display.textContent = new Date(`${value}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      } else if (field === 'repositoryUrl' || field === 'pullRequestUrl') {
+        display.dataset.value = value;
+        display.replaceChildren();
+        if (value) {
+          const link = document.createElement('a');
+          link.href = value;
+          link.target = '_blank';
+          link.rel = 'noreferrer';
+          link.textContent = value.replace(/^https:\/\/(www\.)?/, '');
+          display.append(link);
+        } else {
+          display.textContent = '—';
+        }
       } else {
         display.textContent = value;
         if (field === 'name') document.title = `${value} · Avishek's Portfolio`;
@@ -109,78 +126,38 @@ const { folder } = Astro.props;
       pencil.addEventListener('click', () => {
         const field = pencil.dataset.inlineEdit ?? '';
         const spec = FIELDS[field];
-        const display = displayFor(field);
-        if (!spec || !display || !requireToken()) return;
-        if (document.querySelector('.inline-editor')) return; // one edit at a time
+        if (!spec || !requireToken()) return;
 
-        const editor = document.createElement('div');
-        editor.className = 'inline-editor';
-        let control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
-        if (spec.kind === 'textarea') {
-          const textarea = document.createElement('textarea');
-          textarea.rows = spec.rows ?? 4;
-          textarea.maxLength = spec.max ?? 3000;
-          textarea.value = currentValue(field);
-          control = textarea;
-        } else if (spec.kind === 'select') {
-          const select = document.createElement('select');
-          for (const value of statuses) {
-            const option = document.createElement('option');
-            option.value = value;
-            option.textContent = value.replaceAll('-', ' ');
-            option.selected = value === currentValue(field);
-            select.append(option);
-          }
-          control = select;
-        } else {
-          const input = document.createElement('input');
-          input.type = spec.kind === 'date' ? 'date' : 'text';
-          if (spec.max) input.maxLength = spec.max;
-          input.value = currentValue(field);
-          control = input;
-        }
-        const save = document.createElement('button');
-        save.type = 'button';
-        save.className = 'inline-editor__save';
-        save.textContent = 'Save';
-        const cancel = document.createElement('button');
-        cancel.type = 'button';
-        cancel.className = 'inline-editor__cancel';
-        cancel.textContent = 'Cancel';
-        const note = document.createElement('span');
-        note.className = 'inline-editor__note';
-        const actions = document.createElement('div');
-        actions.className = 'inline-editor__actions';
-        actions.append(save, cancel, note);
-        editor.append(control, actions);
+        const hasRepo = Boolean(currentValue('repositoryUrl'));
+        const supportsAi = (field === 'description' || field === 'why') && Boolean(currentValue('repositoryUrl') || currentValue('pullRequestUrl'));
 
-        display.hidden = true;
-        pencil.hidden = true;
-        display.insertAdjacentElement('afterend', editor);
-        control.focus();
-
-        const closeEditor = () => {
-          editor.remove();
-          display.hidden = false;
-          pencil.hidden = false;
-        };
-        cancel.addEventListener('click', closeEditor);
-        save.addEventListener('click', async () => {
-          const value = control.value.trim();
-          if (!value) { note.textContent = 'A value is required.'; return; }
-          if (spec.kind === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) { note.textContent = 'Use a valid date.'; return; }
-          save.disabled = true;
-          note.textContent = 'Committing…';
-          try {
-            await patchFrontmatter((metadata) => { metadata[field] = value; }, `Update ${field} from the hosted editor`);
+        openFieldEditor({
+          spec,
+          current: currentValue(field),
+          statuses: field === 'status' ? (hasRepo ? statuses : ['idea']) : undefined,
+          statusNote: field === 'status' && !hasRepo ? 'Add a repository link to move this project beyond Idea.' : undefined,
+          aiComplete: supportsAi
+            ? async (existing) => {
+                const context = await gatherRepoContext(token, currentValue('repositoryUrl'), currentValue('pullRequestUrl'));
+                return aiComplete({
+                  field: field as 'description' | 'why',
+                  existing,
+                  projectName: currentValue('name'),
+                  context,
+                });
+              }
+            : undefined,
+          onApply: async (value) => {
+            await patchFrontmatter((metadata) => {
+              if ((field === 'repositoryUrl' || field === 'pullRequestUrl') && !value) delete metadata[field];
+              else metadata[field] = value;
+              // losing the repository drops the project back to an idea
+              if (field === 'repositoryUrl' && !value) metadata.status = 'idea';
+            }, `Update ${spec.label} from the hosted editor`);
             applyDisplay(field, value);
-            closeEditor();
+            if (field === 'repositoryUrl' && !value) applyDisplay('status', 'idea');
             setStatus('Saved. The site rebuilds in about a minute.');
-          } catch (error) {
-            handleAuthFailure(error);
-            note.textContent = (error as Error).message || 'The commit failed.';
-            save.disabled = false;
-          }
+          },
         });
       });
     });

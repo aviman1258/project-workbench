@@ -67,6 +67,24 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
         </dd>
       </div>
       <div><dt>Updated</dt><dd><time datetime={data.updatedDate.toISOString()}>{formatDate(data.updatedDate)}</time></dd></div>
+      <div>
+        <dt>Repository</dt>
+        <dd class="inline-editable">
+          <span data-field-display="repositoryUrl" data-value={data.repositoryUrl ?? ''}>
+            {data.repositoryUrl ? <a href={data.repositoryUrl} target="_blank" rel="noreferrer">{data.repositoryUrl.replace(/^https:\/\/(www\.)?/, '')}</a> : '—'}
+          </span>
+          {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="repositoryUrl" aria-label="Edit the repository link" set:html={pencil} />}
+        </dd>
+      </div>
+      <div>
+        <dt>Pull request</dt>
+        <dd class="inline-editable">
+          <span data-field-display="pullRequestUrl" data-value={data.pullRequestUrl ?? ''}>
+            {data.pullRequestUrl ? <a href={data.pullRequestUrl} target="_blank" rel="noreferrer">{data.pullRequestUrl.replace(/^https:\/\/(www\.)?/, '')}</a> : '—'}
+          </span>
+          {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="pullRequestUrl" aria-label="Edit the pull request link" set:html={pencil} />}
+        </dd>
+      </div>
     </dl>
 
     {lockedView && <PrivateVault id={data.id} />}
