@@ -125,9 +125,8 @@ async function draftWithAnthropic(apiKey: string, userPrompt: string): Promise<s
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
   try {
     const response = await client.messages.create({
-      model: 'claude-opus-5',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 600,
-      output_config: { effort: 'low' },
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userPrompt }],
     });
