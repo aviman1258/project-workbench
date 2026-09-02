@@ -3,31 +3,23 @@ import { getCollection } from 'astro:content';
 import ProjectCard from '../components/ProjectCard.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
 const projects = (await getCollection('projects')).sort((a, b) => b.data.updatedDate.getTime() - a.data.updatedDate.getTime());
-const stats = [
-  { label: 'Ideas', value: projects.filter((project) => project.data.status === 'idea').length },
-  { label: 'In development', value: projects.filter((project) => project.data.status === 'dev').length },
-  { label: 'In review', value: projects.filter((project) => project.data.status === 'review').length },
-  { label: 'Delivered', value: projects.filter((project) => project.data.status === 'delivered').length },
-];
 ---
 
 <BaseLayout>
   <div class="page-shell home-page">
-    <section class="page-intro" aria-labelledby="portfolio-title">
-      <div>
-        <p class="eyebrow">Product & engineering archive</p>
-        <h1 id="portfolio-title">Ideas I couldn’t leave alone.</h1>
-        <p class="page-intro__copy">A running collection of things I noticed, wondered about, and built just far enough to find out if they were actually useful.</p>
-      </div>
-    </section>
-
-    <section class="stats-grid" aria-label="Portfolio summary">
-      {stats.map((stat) => <div class="stat-card"><strong>{String(stat.value).padStart(2, '0')}</strong><span>{stat.label}</span></div>)}
-    </section>
-
-    <section class="work-section" aria-labelledby="work-heading">
-      <div class="section-heading">
-        <div><p class="eyebrow">Portfolio index</p><h2 id="work-heading">Projects</h2></div>
+    <section class="work-section" aria-label="Projects">
+      <div class="project-coverflow" data-project-coverflow tabindex="0" aria-label="Project carousel. Use the arrow keys or controls to browse projects.">
+        <div class="project-coverflow__stage" data-project-grid>{projects.map((project) => <ProjectCard project={project} />)}</div>
+        <div class="project-coverflow__navigation">
+          <button type="button" data-project-coverflow-previous aria-label="Show previous project"><span aria-hidden="true">←</span></button>
+          <div class="project-coverflow__position" aria-live="polite"><strong data-project-coverflow-current>1</strong><span>/</span><span data-project-coverflow-total>{projects.length}</span></div>
+          <div class="project-coverflow__dots" aria-label="Choose a project">
+            {projects.map((project, index) => (
+              <button type="button" data-project-coverflow-dot data-project-id={project.data.id} data-active={index === 0 ? 'true' : 'false'} aria-label={`Show ${project.data.name}`} aria-current={index === 0 ? 'true' : undefined}></button>
+            ))}
+          </div>
+          <button type="button" data-project-coverflow-next aria-label="Show next project"><span aria-hidden="true">→</span></button>
+        </div>
       </div>
 
       <div class="filter-panel" aria-label="Filter projects">
@@ -56,7 +48,6 @@ const stats = [
         <button class="primary-button" type="button" data-private-unlock-button>Unlock with Windows Hello</button>
       </aside>
 
-      <div class="project-grid" data-project-grid>{projects.map((project) => <ProjectCard project={project} />)}</div>
       <div class="empty-results" data-empty-results hidden><span aria-hidden="true">⌁</span><h3>No matching projects</h3><p>Try a broader search or clear one of the filters.</p><button type="button" data-empty-reset>Clear all filters</button></div>
     </section>
   </div>
@@ -84,7 +75,73 @@ const stats = [
   const unlockStatus = document.querySelector<HTMLElement>('[data-private-unlock-status]');
   let pendingPrivateUrl = '';
   let unlockInProgress = false;
+  const projectCoverflow = document.querySelector<HTMLElement>('[data-project-coverflow]');
+  const coverflowCurrent = document.querySelector<HTMLElement>('[data-project-coverflow-current]');
+  const coverflowTotal = document.querySelector<HTMLElement>('[data-project-coverflow-total]');
+  const coverflowDots = [...document.querySelectorAll<HTMLButtonElement>('[data-project-coverflow-dot]')];
+  let activeCoverflowCard: HTMLElement | null = cards[0] ?? null;
   const compareText = (left: string, right: string) => left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
+
+  const visibleCoverflowCards = () => projectGrid
+    ? [...projectGrid.querySelectorAll<HTMLElement>('[data-project-card]')].filter((card) => !card.hidden)
+    : [];
+
+  function showCoverflowCard(next: number | HTMLElement) {
+    const visibleCards = visibleCoverflowCards();
+    if (!visibleCards.length) {
+      if (projectCoverflow) projectCoverflow.hidden = true;
+      return;
+    }
+    if (projectCoverflow) projectCoverflow.hidden = false;
+    const requested = typeof next === 'number'
+      ? visibleCards[(next + visibleCards.length) % visibleCards.length]
+      : next;
+    activeCoverflowCard = visibleCards.includes(requested) ? requested : visibleCards[0];
+    const currentIndex = Math.max(0, visibleCards.indexOf(activeCoverflowCard));
+
+    cards.forEach((card) => {
+      let position = 'hidden';
+      if (!card.hidden) {
+        const index = visibleCards.indexOf(card);
+        const previousIndex = (currentIndex - 1 + visibleCards.length) % visibleCards.length;
+        const nextIndex = (currentIndex + 1) % visibleCards.length;
+        position = index === currentIndex ? 'active' : index === previousIndex ? 'previous' : index === nextIndex ? 'next' : 'hidden';
+        if (visibleCards.length === 2 && index !== currentIndex) position = 'next';
+      }
+      card.dataset.coverflowPosition = position;
+      card.setAttribute('aria-hidden', String(position !== 'active'));
+      card.inert = position !== 'active';
+    });
+
+    if (coverflowCurrent) coverflowCurrent.textContent = String(currentIndex + 1).padStart(2, '0');
+    if (coverflowTotal) coverflowTotal.textContent = String(visibleCards.length).padStart(2, '0');
+    coverflowDots.forEach((dot) => {
+      const card = cards.find((candidate) => candidate.dataset.projectId === dot.dataset.projectId);
+      dot.hidden = !card || card.hidden;
+      const active = card === activeCoverflowCard;
+      dot.dataset.active = String(active);
+      if (active) dot.setAttribute('aria-current', 'true');
+      else dot.removeAttribute('aria-current');
+    });
+  }
+
+  function moveCoverflow(direction: number) {
+    const visibleCards = visibleCoverflowCards();
+    if (!visibleCards.length) return;
+    const currentIndex = Math.max(0, visibleCards.indexOf(activeCoverflowCard ?? visibleCards[0]));
+    showCoverflowCard(currentIndex + direction);
+  }
+
+  projectCoverflow?.querySelector('[data-project-coverflow-previous]')?.addEventListener('click', () => moveCoverflow(-1));
+  projectCoverflow?.querySelector('[data-project-coverflow-next]')?.addEventListener('click', () => moveCoverflow(1));
+  projectCoverflow?.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowLeft') { event.preventDefault(); moveCoverflow(-1); }
+    if (event.key === 'ArrowRight') { event.preventDefault(); moveCoverflow(1); }
+  });
+  coverflowDots.forEach((dot) => dot.addEventListener('click', () => {
+    const card = cards.find((candidate) => candidate.dataset.projectId === dot.dataset.projectId);
+    if (card) showCoverflowCard(card);
+  }));
 
   async function postAuth(path: string, body: unknown) {
     const response = await fetch(path, {
@@ -208,6 +265,8 @@ const stats = [
       if (comparison === 0) comparison = compareText(left.dataset.projectId ?? '', right.dataset.projectId ?? '');
       return comparison * direction;
     }).forEach((card) => projectGrid.append(card));
+    activeCoverflowCard = null;
+    showCoverflowCard(0);
   }
 
   function applyFilters() {
@@ -225,6 +284,7 @@ const stats = [
     if (resultCount) resultCount.textContent = String(visible);
     if (emptyState) emptyState.hidden = visible !== 0;
     if (resetButton) resetButton.hidden = !hasFilters;
+    showCoverflowCard(activeCoverflowCard ?? 0);
   }
 
   function resetFilters() {
