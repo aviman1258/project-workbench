@@ -13,6 +13,7 @@ artifactOrder:
   - portfolio-workbench-project-editor.png
   - portfolio-workbench-add-project.png
 featuredArtifact: portfolio-workbench-project-index.png
+repositoryUrl: https://github.com/aviman1258/project-workbench
 ---
 
 ## What I Built
