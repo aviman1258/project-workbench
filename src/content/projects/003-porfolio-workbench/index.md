@@ -12,7 +12,7 @@ artifactOrder:
   - portfolio-workbench-project-index.png
   - portfolio-workbench-project-editor.png
   - portfolio-workbench-add-project.png
-featuredArtifact: portfolio-workbench-project-index.png
+featuredArtifact: portfolio-workbench-project-editor.png
 ---
 
 ## What I Built
