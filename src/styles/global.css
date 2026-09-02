@@ -1349,35 +1349,36 @@ a {
   z-index: 3;
   top: 14px;
   right: 14px;
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   padding: 0;
   display: grid;
   place-items: center;
-  border: 2px solid rgb(255 255 255 / 92%);
-  border-radius: 999px;
-  background: var(--red);
-  color: #fff;
-  box-shadow: 0 4px 14px rgb(49 27 23 / 28%);
+  border: 1px solid var(--red);
+  border-radius: 50%;
+  background: rgb(247 244 234 / 94%);
+  color: var(--red);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease, transform 150ms ease;
 }
 
 .artifact-slide__delete svg {
-  width: 21px;
-  height: 21px;
+  width: 19px;
+  height: 19px;
 }
 
 .artifact-slide__delete:hover,
 .artifact-slide__delete:focus-visible {
-  background: #74352d;
-  box-shadow: 0 5px 18px rgb(49 27 23 / 38%);
-  transform: scale(1.05);
+  border-color: var(--red);
+  background: var(--red);
+  color: #fff;
+  transform: translateY(-1px);
 }
 
 .artifact-slide__delete:focus-visible {
-  outline: 3px solid rgb(255 255 255 / 95%);
-  outline-offset: 2px;
+  outline: 3px solid rgb(138 69 60 / 22%);
+  outline-offset: 3px;
 }
 
 .artifact-slide__media {
