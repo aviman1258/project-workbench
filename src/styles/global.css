@@ -108,6 +108,130 @@ a {
   box-shadow: 0 2px 8px rgb(24 43 36 / 14%);
 }
 
+.brand__mark--button {
+  padding: 0;
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.brand__mark--button:hover,
+.brand__mark--button:focus-visible {
+  transform: scale(1.08);
+  box-shadow: 0 3px 12px rgb(24 43 36 / 26%);
+}
+
+.brand__home {
+  color: var(--ink);
+  text-decoration: none;
+  line-height: 1.2;
+}
+
+.business-card {
+  max-width: min(92vw, 440px);
+  text-align: left;
+}
+
+.business-card__head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.business-card__head img {
+  width: 64px;
+  height: 64px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+}
+
+.business-card__head h3 {
+  margin: 0;
+  font: 500 1.6rem/1.15 var(--serif);
+}
+
+.business-card__head p {
+  margin: 4px 0 0;
+  color: var(--ink-faint);
+  font: 11px/1 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.business-card__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.business-card__rows a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.business-card__rows a:hover {
+  border-color: var(--forest);
+  background: var(--moss);
+}
+
+.business-card__rows svg {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  color: var(--forest);
+}
+
+.business-card__certs {
+  margin-top: 18px;
+}
+
+.business-card__certs h4 {
+  margin: 0 0 8px;
+  color: var(--ink-faint);
+  font: 11px/1 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.business-card__certs a {
+  display: block;
+  padding: 11px 14px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.business-card__certs a:hover {
+  border-color: var(--forest);
+  background: var(--moss);
+}
+
+.business-card__certs strong {
+  display: block;
+  font-size: 13.5px;
+}
+
+.business-card__certs span {
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.business-card .share-dialog__actions {
+  margin-top: 20px;
+}
+
 .brand__mark img {
   display: block;
   width: 100%;
