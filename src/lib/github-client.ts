@@ -8,14 +8,20 @@ export const GITHUB_BRANCH = 'main';
 
 const TOKEN_KEY = 'workbench-github-token';
 
+// Fired on window whenever the stored token changes, so every connect surface
+// (header icon, embedded panels, editors) stays in sync without reloading.
+export const TOKEN_EVENT = 'workbench-token-changed';
+
 export function getStoredToken(): string {
   try { return window.localStorage.getItem(TOKEN_KEY) ?? ''; } catch { return ''; }
 }
 export function storeToken(token: string) {
   try { window.localStorage.setItem(TOKEN_KEY, token); } catch { /* private mode */ }
+  window.dispatchEvent(new CustomEvent(TOKEN_EVENT));
 }
 export function clearToken() {
   try { window.localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+  window.dispatchEvent(new CustomEvent(TOKEN_EVENT));
 }
 
 export async function gh(token: string, path: string, init: RequestInit = {}): Promise<Record<string, any>> {
@@ -140,6 +146,10 @@ export function wireTokenPanel(root: HTMLElement, onChange: (token: string) => v
     onChange(token);
   };
   apply();
+  window.addEventListener(TOKEN_EVENT, () => {
+    const stored = getStoredToken();
+    if (stored !== token) { token = stored; apply(); }
+  });
 
   root.querySelector('[data-remote-token-save]')?.addEventListener('click', async () => {
     const candidate = input.value.trim();

@@ -1707,16 +1707,153 @@ a {
 }
 
 .site-action--share {
-  display: inline-flex;
-  align-items: center;
   gap: 7px;
   cursor: pointer;
-  font: inherit;
 }
 
 .site-action--share svg {
   width: 14px;
   height: 14px;
+}
+
+.project-card__status {
+  position: absolute;
+  z-index: 4;
+  top: 12px;
+  right: 12px;
+}
+
+.section-heading--carousel {
+  margin-bottom: 26px;
+}
+
+.section-heading--carousel h2 {
+  font-size: clamp(2rem, 4vw, 3rem);
+}
+
+.github-status {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+
+.github-status svg {
+  width: 19px;
+  height: 19px;
+}
+
+.github-status[data-connected='true'] {
+  border: 1px solid var(--forest);
+  background: var(--forest);
+  color: #fff;
+}
+
+.github-status[data-connected='false'] {
+  border: 1.5px solid var(--red);
+  background: transparent;
+  color: var(--red);
+}
+
+.token-dialog {
+  text-align: left;
+}
+
+.token-dialog h3 {
+  text-align: center;
+}
+
+.token-dialog__input {
+  width: 100%;
+  height: 43px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.token-dialog__forget {
+  color: var(--red);
+}
+
+.inline-edit {
+  width: 30px;
+  height: 30px;
+  margin-left: 8px;
+  display: inline-grid;
+  place-items: center;
+  vertical-align: middle;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface-strong);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+.inline-edit svg {
+  width: 14px;
+  height: 14px;
+}
+
+.inline-edit:hover,
+.inline-edit:focus-visible {
+  color: var(--forest);
+  border-color: var(--forest);
+  background: var(--moss);
+}
+
+.inline-editor {
+  margin: 10px 0;
+  max-width: 720px;
+}
+
+.inline-editor input,
+.inline-editor textarea,
+.inline-editor select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--forest);
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+  color: var(--ink);
+  font: 15px/1.5 var(--sans);
+}
+
+.inline-editor__actions {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inline-editor__actions button {
+  border-radius: 999px;
+  font: 600 12.5px/1 var(--sans);
+  padding: 9px 16px;
+  cursor: pointer;
+}
+
+.inline-editor__save {
+  border: 1px solid var(--forest);
+  background: var(--forest);
+  color: #fff;
+}
+
+.inline-editor__cancel {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.inline-editor__note {
+  color: var(--ink-soft);
+  font-size: 12.5px;
 }
 
 .share-dialog {

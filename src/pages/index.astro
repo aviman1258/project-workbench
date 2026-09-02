@@ -7,7 +7,10 @@ const projects = (await getCollection('projects')).sort((a, b) => b.data.updated
 
 <BaseLayout>
   <div class="page-shell home-page">
-    <section class="work-section" aria-label="Projects">
+    <section class="work-section" aria-labelledby="work-heading">
+      <div class="section-heading section-heading--carousel">
+        <div><p class="eyebrow">Portfolio index</p><h2 id="work-heading">The project reel.</h2></div>
+      </div>
       <div class="project-coverflow" data-project-coverflow tabindex="0" aria-label="Project carousel. Use the arrow keys or controls to browse projects.">
         <div class="project-coverflow__stage" data-project-grid>{projects.map((project) => <ProjectCard project={project} />)}</div>
         <div class="project-coverflow__navigation">

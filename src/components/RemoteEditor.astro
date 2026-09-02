@@ -1,102 +1,51 @@
 ---
 import type { CollectionEntry } from 'astro:content';
 import { projectStatuses } from '../lib/project-schema';
-import { formatLabel } from '../lib/projects';
-import GitHubConnect from './GitHubConnect.astro';
 
-// Hosted-site editor: commits changes straight to the GitHub repo. The push
-// triggers the Pages workflow, so saves appear on the site about a minute later.
+// Invisible machinery for hosted-site editing: inline field edits (pencils),
+// direct media upload from the ＋ Add media button, per-slide delete, and the
+// featured-artifact star. Every action commits to GitHub; the token lives behind
+// the header's GitHub icon.
 interface Props {
   project: CollectionEntry<'projects'>;
   folder: string;
 }
 
-const { project, folder } = Astro.props;
-const { data } = project;
+const { folder } = Astro.props;
 ---
 
-<section class="project-editor" aria-labelledby="remote-editor-title">
-  <div class="project-editor__intro">
-    <div><p class="eyebrow">On-the-go editor</p><h2 id="remote-editor-title">Edit this project</h2></div>
-    <p>Changes are committed to the GitHub repository; the site rebuilds itself in about a minute.</p>
-  </div>
-
-  <div class="project-editor__tools" data-remote-editor data-project-folder={folder}>
-    <GitHubConnect />
-
-    <details data-remote-edit-panel hidden>
-      <summary><span aria-hidden="true">✦</span><span>Edit project details</span></summary>
-      <form class="compact-form" data-remote-edit-form novalidate>
-        <label class="field"><span>Name</span><input name="name" value={data.name} required maxlength="120" /></label>
-        <label class="field"><span>Description</span><textarea name="description" required maxlength="500" rows="3">{data.description}</textarea></label>
-        <label class="field"><span>Why it was built</span><textarea name="why" required maxlength="3000" rows="8">{data.why}</textarea></label>
-        <div class="form-grid form-grid--two">
-          <label class="field"><span>Status</span><select name="status" required>{projectStatuses.map((value) => <option value={value} selected={value === data.status}>{formatLabel(value)}</option>)}</select></label>
-          <label class="field"><span>Start date</span><input name="startDate" type="date" value={data.startDate.toISOString().slice(0, 10)} required /></label>
-        </div>
-        <div class="compact-form__actions">
-          <p class="form-status" data-remote-edit-status aria-live="assertive"></p>
-          <button class="primary-button" type="submit">Commit changes</button>
-        </div>
-      </form>
-    </details>
-
-    <details data-remote-media-panel hidden>
-      <summary><span aria-hidden="true">＋</span><span>Add media</span></summary>
-      <div class="compact-form">
-        <p class="remote-editor-hint">Photos, PDFs, or MP4s up to 20 MB. The file is committed to the project's artifacts folder.</p>
-        <label class="field"><span>File</span><input type="file" accept=".png,.jpg,.jpeg,.pdf,.mp4" data-remote-media-input /></label>
-        <div class="compact-form__actions">
-          <p class="form-status" data-remote-media-status aria-live="assertive"></p>
-          <button class="primary-button" type="button" data-remote-media-upload>Commit media</button>
-        </div>
-      </div>
-    </details>
-  </div>
-</section>
+<div data-remote-editor data-project-folder={folder} data-statuses={projectStatuses.join(',')} hidden>
+  <input type="file" multiple accept=".png,.jpg,.jpeg,.pdf,.mp4" data-remote-media-input />
+</div>
 
 <script>
   import { parse, stringify } from 'yaml';
-  import { deleteFile, encodeText, getFile, putFile, wireTokenPanel } from '../lib/github-client';
+  import { TOKEN_EVENT, encodeText, getFile, getStoredToken, putFile, deleteFile } from '../lib/github-client';
 
   const root = document.querySelector<HTMLElement>('[data-remote-editor]');
   if (root) {
     const folder = root.dataset.projectFolder ?? '';
+    const statuses = (root.dataset.statuses ?? '').split(',').filter(Boolean);
     const indexPath = `src/content/projects/${folder}/index.md`;
-    const editPanel = root.querySelector<HTMLDetailsElement>('[data-remote-edit-panel]')!;
-    const mediaPanel = root.querySelector<HTMLDetailsElement>('[data-remote-media-panel]')!;
     const mediaStatus = document.querySelector<HTMLElement>('[data-media-status]');
-    const deleteDialog = document.querySelector<HTMLDialogElement>('[data-media-delete-dialog]');
-    const deleteName = deleteDialog?.querySelector<HTMLElement>('[data-media-delete-name]');
-    let pendingDelete = '';
 
-    let token = '';
-    const connection = wireTokenPanel(root, (next) => {
-      token = next;
-      editPanel.hidden = !token;
-      mediaPanel.hidden = !token;
-    });
+    let token = getStoredToken();
+    window.addEventListener(TOKEN_EVENT, () => { token = getStoredToken(); });
 
-    // The "＋ Add media" button in the artifacts section jumps to this editor.
-    document.querySelector('[data-remote-media-open]')?.addEventListener('click', () => {
-      const target = token ? mediaPanel : root.querySelector<HTMLDetailsElement>('[data-remote-token-panel]');
-      if (target) target.open = true;
-      root.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      if (token) root.querySelector<HTMLInputElement>('[data-remote-media-input]')?.focus();
-    });
+    const setStatus = (message: string) => { if (mediaStatus) mediaStatus.textContent = message; };
+    // no token: open the header's GitHub dialog instead of failing silently
+    const requireToken = () => {
+      if (token) return true;
+      document.querySelector<HTMLDialogElement>('[data-token-dialog]')?.showModal();
+      return false;
+    };
     const handleAuthFailure = (error: unknown) => {
-      if ((error as { status?: number }).status === 401) connection.invalidate();
+      if ((error as { status?: number }).status === 401) {
+        document.querySelector<HTMLDialogElement>('[data-token-dialog]')?.showModal();
+      }
     };
 
-    const showConnectPanel = () => {
-      const tokenPanel = root.querySelector<HTMLDetailsElement>('[data-remote-token-panel]');
-      if (tokenPanel) tokenPanel.open = true;
-      root.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    };
-
-    // mutate receives the current front matter and edits it in place; undefined
-    // values are removed. updatedDate is always bumped.
-    const patchFrontmatter = async (mutate: (metadata: Record<string, unknown>) => void, message: string) => {
+    const patchOnce = async (mutate: (metadata: Record<string, unknown>) => void, message: string) => {
       const { sha, text } = await getFile(token, indexPath);
       const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
       if (!match) throw new Error('index.md is missing YAML front matter.');
@@ -110,104 +59,189 @@ const { data } = project;
       const next = `---\n${stringify(metadata, { lineWidth: 0 }).trimEnd()}\n---\n${body ? `\n${body}` : ''}`;
       await putFile(token, indexPath, encodeText(next), message, sha);
     };
-
-    // --- edit fields ---
-    const editForm = root.querySelector<HTMLFormElement>('[data-remote-edit-form]')!;
-    const editStatus = root.querySelector<HTMLElement>('[data-remote-edit-status]')!;
-    editForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const formData = new FormData(editForm);
-      const fields = {
-        name: String(formData.get('name') ?? '').trim(),
-        description: String(formData.get('description') ?? '').trim(),
-        why: String(formData.get('why') ?? '').trim(),
-        status: String(formData.get('status') ?? ''),
-        startDate: String(formData.get('startDate') ?? ''),
-      };
-      if (!fields.name || !fields.description || !fields.why || !/^\d{4}-\d{2}-\d{2}$/.test(fields.startDate)) {
-        editStatus.textContent = 'Name, description, why, and a valid start date are required.';
-        return;
-      }
-      const submit = editForm.querySelector<HTMLButtonElement>('button[type=submit]')!;
-      submit.disabled = true;
-      editStatus.textContent = 'Committing…';
+    // right after a commit, the contents API can briefly serve the previous file,
+    // making a quick follow-up edit fail on a stale sha — wait and retry once
+    const patchFrontmatter = async (mutate: (metadata: Record<string, unknown>) => void, message: string) => {
       try {
-        await patchFrontmatter((metadata) => Object.assign(metadata, fields), `Update ${fields.name} from the hosted editor`);
-        editStatus.textContent = 'Committed. The site rebuilds in about a minute.';
+        await patchOnce(mutate, message);
       } catch (error) {
-        handleAuthFailure(error);
-        editStatus.textContent = (error as Error).message || 'The commit failed.';
-      } finally {
-        submit.disabled = false;
+        if ((error as { status?: number }).status !== 409) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await patchOnce(mutate, message);
       }
-    });
+    };
 
-    // --- add media ---
-    const mediaInput = root.querySelector<HTMLInputElement>('[data-remote-media-input]')!;
-    const uploadStatus = root.querySelector<HTMLElement>('[data-remote-media-status]')!;
-    root.querySelector('[data-remote-media-upload]')?.addEventListener('click', async () => {
-      const file = mediaInput.files?.[0];
-      if (!file) { uploadStatus.textContent = 'Choose a file first.'; return; }
-      if (!/\.(png|jpe?g|pdf|mp4)$/i.test(file.name)) { uploadStatus.textContent = 'PNG, JPG, PDF, or MP4 only.'; return; }
-      if (file.size > 20 * 1024 * 1024) { uploadStatus.textContent = 'Keep files under 20 MB.'; return; }
+    // --- inline field editing (pencil buttons) ---
+    const FIELDS: Record<string, { kind: 'input' | 'textarea' | 'select' | 'date'; max?: number; rows?: number }> = {
+      name: { kind: 'input', max: 120 },
+      description: { kind: 'textarea', max: 500, rows: 3 },
+      why: { kind: 'textarea', max: 3000, rows: 6 },
+      status: { kind: 'select' },
+      startDate: { kind: 'date' },
+    };
+    const displayFor = (field: string) => document.querySelector<HTMLElement>(`[data-field-display="${field}"]`);
+    const currentValue = (field: string) => {
+      const display = displayFor(field);
+      if (!display) return '';
+      return display.dataset.value ?? display.textContent?.trim() ?? '';
+    };
+    const applyDisplay = (field: string, value: string) => {
+      const display = displayFor(field);
+      if (!display) return;
+      if (field === 'status') {
+        display.dataset.value = value;
+        display.textContent = value.replaceAll('-', ' ');
+        const badge = document.querySelector<HTMLElement>('.status-badge');
+        if (badge) {
+          badge.className = `status-badge status-badge--${value}`;
+          badge.textContent = value.replaceAll('-', ' ');
+        }
+      } else if (field === 'startDate') {
+        display.dataset.value = value;
+        display.textContent = new Date(`${value}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      } else {
+        display.textContent = value;
+        if (field === 'name') document.title = `${value} · Avishek's Portfolio`;
+      }
+    };
 
-      const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
-      const stem = file.name.slice(0, file.name.lastIndexOf('.')).replace(/[^a-zA-Z0-9._-]+/g, '-') || 'media';
-      const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
-      const filename = `${stem}-${stamp}${extension}`;
+    document.querySelectorAll<HTMLButtonElement>('[data-inline-edit]').forEach((pencil) => {
+      pencil.addEventListener('click', () => {
+        const field = pencil.dataset.inlineEdit ?? '';
+        const spec = FIELDS[field];
+        const display = displayFor(field);
+        if (!spec || !display || !requireToken()) return;
+        if (document.querySelector('.inline-editor')) return; // one edit at a time
 
-      uploadStatus.textContent = `Uploading ${filename}…`;
-      try {
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.addEventListener('load', () => resolve(String(reader.result)));
-          reader.addEventListener('error', () => reject(new Error('The file could not be read.')));
-          reader.readAsDataURL(file);
+        const editor = document.createElement('div');
+        editor.className = 'inline-editor';
+        let control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+        if (spec.kind === 'textarea') {
+          const textarea = document.createElement('textarea');
+          textarea.rows = spec.rows ?? 4;
+          textarea.maxLength = spec.max ?? 3000;
+          textarea.value = currentValue(field);
+          control = textarea;
+        } else if (spec.kind === 'select') {
+          const select = document.createElement('select');
+          for (const value of statuses) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = value.replaceAll('-', ' ');
+            option.selected = value === currentValue(field);
+            select.append(option);
+          }
+          control = select;
+        } else {
+          const input = document.createElement('input');
+          input.type = spec.kind === 'date' ? 'date' : 'text';
+          if (spec.max) input.maxLength = spec.max;
+          input.value = currentValue(field);
+          control = input;
+        }
+        const save = document.createElement('button');
+        save.type = 'button';
+        save.className = 'inline-editor__save';
+        save.textContent = 'Save';
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'inline-editor__cancel';
+        cancel.textContent = 'Cancel';
+        const note = document.createElement('span');
+        note.className = 'inline-editor__note';
+        const actions = document.createElement('div');
+        actions.className = 'inline-editor__actions';
+        actions.append(save, cancel, note);
+        editor.append(control, actions);
+
+        display.hidden = true;
+        pencil.hidden = true;
+        display.insertAdjacentElement('afterend', editor);
+        control.focus();
+
+        const closeEditor = () => {
+          editor.remove();
+          display.hidden = false;
+          pencil.hidden = false;
+        };
+        cancel.addEventListener('click', closeEditor);
+        save.addEventListener('click', async () => {
+          const value = control.value.trim();
+          if (!value) { note.textContent = 'A value is required.'; return; }
+          if (spec.kind === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) { note.textContent = 'Use a valid date.'; return; }
+          save.disabled = true;
+          note.textContent = 'Committing…';
+          try {
+            await patchFrontmatter((metadata) => { metadata[field] = value; }, `Update ${field} from the hosted editor`);
+            applyDisplay(field, value);
+            closeEditor();
+            setStatus('Saved. The site rebuilds in about a minute.');
+          } catch (error) {
+            handleAuthFailure(error);
+            note.textContent = (error as Error).message || 'The commit failed.';
+            save.disabled = false;
+          }
         });
-        await putFile(
-          token,
-          `src/content/projects/${folder}/artifacts/${filename}`,
-          dataUrl.slice(dataUrl.indexOf(',') + 1),
-          `Add ${filename} from the hosted editor`,
-        );
-        await patchFrontmatter((metadata) => {
-          // the first artifact a project gets becomes its featured artifact
-          if (!metadata.featuredArtifact) metadata.featuredArtifact = filename;
-        }, `Touch updated date for ${filename}`);
-        mediaInput.value = '';
-        uploadStatus.textContent = 'Committed. The site rebuilds in about a minute.';
+      });
+    });
+
+    // --- add media: the ＋ Add media button opens the picker directly ---
+    const mediaInput = root.querySelector<HTMLInputElement>('[data-remote-media-input]')!;
+    document.querySelector('[data-remote-media-open]')?.addEventListener('click', () => {
+      if (requireToken()) mediaInput.click();
+    });
+    mediaInput.addEventListener('change', async () => {
+      const files = [...(mediaInput.files ?? [])].filter((file) => /\.(png|jpe?g|pdf|mp4)$/i.test(file.name) && file.size <= 20 * 1024 * 1024);
+      mediaInput.value = '';
+      if (!files.length) { setStatus('PNG, JPG, PDF, or MP4 up to 20 MB.'); return; }
+      try {
+        for (const [index, file] of files.entries()) {
+          const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+          const stem = file.name.slice(0, file.name.lastIndexOf('.')).replace(/[^a-zA-Z0-9._-]+/g, '-') || 'media';
+          const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+          const filename = `${stem}-${stamp}${extension}`;
+          setStatus(`Uploading ${filename} (${index + 1} of ${files.length})…`);
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.addEventListener('load', () => resolve(String(reader.result)));
+            reader.addEventListener('error', () => reject(new Error(`${file.name} could not be read.`)));
+            reader.readAsDataURL(file);
+          });
+          await putFile(token, `src/content/projects/${folder}/artifacts/${filename}`, dataUrl.slice(dataUrl.indexOf(',') + 1), `Add ${filename} from the hosted editor`);
+          await patchFrontmatter((metadata) => {
+            if (!metadata.featuredArtifact) metadata.featuredArtifact = filename;
+          }, `Touch updated date for ${filename}`);
+        }
+        setStatus('Committed. The carousel updates after the site rebuilds in about a minute.');
       } catch (error) {
         handleAuthFailure(error);
-        uploadStatus.textContent = (error as Error).message || 'The upload failed.';
+        setStatus((error as Error).message || 'The upload failed.');
       }
     });
 
-    // Starring an artifact makes it the featured artifact (the project-card hero).
+    // --- featured-artifact star ---
     document.querySelectorAll<HTMLButtonElement>('[data-media-feature-trigger]').forEach((trigger) => {
       trigger.addEventListener('click', async () => {
         const filename = trigger.dataset.filename ?? '';
-        if (!filename || trigger.dataset.featured === 'true') return;
-        if (!token) {
-          if (mediaStatus) mediaStatus.textContent = 'Connect GitHub before featuring an artifact.';
-          showConnectPanel();
-          return;
-        }
-        if (mediaStatus) mediaStatus.textContent = `Featuring ${filename}…`;
+        if (!filename || trigger.dataset.featured === 'true' || !requireToken()) return;
+        setStatus(`Featuring ${filename}…`);
         try {
           await patchFrontmatter((metadata) => { metadata.featuredArtifact = filename; }, `Feature ${filename}`);
           document.querySelectorAll<HTMLButtonElement>('[data-media-feature-trigger]').forEach((star) => {
             star.dataset.featured = String(star === trigger);
           });
-          if (mediaStatus) mediaStatus.textContent = `${filename} is now featured. The card updates after the site rebuilds.`;
+          setStatus(`${filename} is now featured. The card updates after the site rebuilds.`);
         } catch (error) {
           handleAuthFailure(error);
-          if (mediaStatus) mediaStatus.textContent = (error as Error).message || 'The artifact could not be featured.';
+          setStatus((error as Error).message || 'The artifact could not be featured.');
         }
       });
     });
 
-    // The carousel uses the same confirmation dialog as the local editor. On the
-    // hosted site, confirming commits the file deletion through the GitHub API.
+    // --- delete via the per-slide trash button + shared confirm dialog ---
+    const deleteDialog = document.querySelector<HTMLDialogElement>('[data-media-delete-dialog]');
+    const deleteName = document.querySelector<HTMLElement>('[data-media-delete-name]');
+    let pendingDelete = '';
     document.querySelectorAll<HTMLButtonElement>('[data-media-delete-trigger]').forEach((trigger) => {
       trigger.addEventListener('click', () => {
         pendingDelete = trigger.dataset.filename ?? '';
@@ -220,21 +254,11 @@ const { data } = project;
     deleteDialog?.querySelector<HTMLButtonElement>('[data-media-delete-confirm]')?.addEventListener('click', async (event) => {
       const confirmButton = event.currentTarget as HTMLButtonElement;
       if (!pendingDelete) return;
-      if (!token) {
-        deleteDialog.close();
-        if (mediaStatus) mediaStatus.textContent = 'Connect GitHub before deleting an artifact.';
-        showConnectPanel();
-        return;
-      }
+      if (!token) { deleteDialog.close(); requireToken(); return; }
       confirmButton.disabled = true;
-      if (mediaStatus) mediaStatus.textContent = `Deleting ${pendingDelete}…`;
+      setStatus(`Deleting ${pendingDelete}…`);
       try {
-        await deleteFile(
-          token,
-          `src/content/projects/${folder}/artifacts/${pendingDelete}`,
-          `Delete ${pendingDelete} from the hosted editor`,
-        );
-        // deleting the featured artifact promotes the next remaining one
+        await deleteFile(token, `src/content/projects/${folder}/artifacts/${pendingDelete}`, `Delete ${pendingDelete} from the hosted editor`);
         const deleted = pendingDelete;
         const remaining = [...document.querySelectorAll<HTMLElement>('[data-media-delete-trigger]')]
           .map((trigger) => trigger.dataset.filename ?? '')
@@ -246,11 +270,11 @@ const { data } = project;
           if (metadata.featuredArtifact === deleted) metadata.featuredArtifact = remaining[0];
         }, `Remove ${deleted} from artifact metadata`);
         deleteDialog.close();
-        if (mediaStatus) mediaStatus.textContent = 'Deleted. The carousel will update after the site rebuilds in about a minute.';
+        setStatus('Deleted. The carousel updates after the site rebuilds in about a minute.');
       } catch (error) {
         handleAuthFailure(error);
         deleteDialog.close();
-        if (mediaStatus) mediaStatus.textContent = (error as Error).message || 'The artifact could not be deleted.';
+        setStatus((error as Error).message || 'The artifact could not be deleted.');
       } finally {
         confirmButton.disabled = false;
       }

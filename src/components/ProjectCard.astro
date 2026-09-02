@@ -1,5 +1,6 @@
 ---
 import type { CollectionEntry } from 'astro:content';
+import StatusBadge from './StatusBadge.astro';
 import { featuredArtifact, loadArtifacts, publicOnlyBuild, withBase } from '../lib/projects';
 
 interface Props {
@@ -24,6 +25,7 @@ const privateProject = data.privacy === 'private';
   data-project-name={data.name}
   data-project-updated={data.updatedDate.getTime()}
 >
+  <span class="project-card__status"><StatusBadge status={data.status} /></span>
   <h2><a href={withBase(`/projects/${data.slug}`)} data-private-project-link={privateProject && !publicOnlyBuild ? 'true' : undefined}>{data.name}</a></h2>
 
   {privateProject ? (

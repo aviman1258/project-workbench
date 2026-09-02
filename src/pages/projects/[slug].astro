@@ -24,6 +24,9 @@ const privateProject = data.privacy === 'private';
 const projectFolder = await getProjectFolder(project);
 const heroArtifact = featuredArtifact(project, artifacts);
 const lockedView = publicOnlyBuild && privateProject;
+const inlineEditable = publicOnlyBuild && !privateProject;
+
+const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>`;
 ---
 
 <BaseLayout title={data.name} description={data.description}>
@@ -33,8 +36,10 @@ const lockedView = publicOnlyBuild && privateProject;
     <header class="project-hero">
       <div class="project-hero__main">
         <div class="project-hero__topline"><span class="project-id">{data.id}</span><StatusBadge status={data.status} /></div>
-        <h1>{data.name}</h1>
-        <p>{data.description}</p>
+        <h1 data-field-display="name">{data.name}</h1>
+        {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="name" aria-label="Edit the name" set:html={pencil} />}
+        <p data-field-display="description">{data.description}</p>
+        {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="description" aria-label="Edit the description" set:html={pencil} />}
       </div>
       <aside class={`confidentiality-card confidentiality-card--${data.privacy}`}>
         <span class="confidentiality-card__icon" aria-hidden="true">◆</span>
@@ -43,8 +48,16 @@ const lockedView = publicOnlyBuild && privateProject;
     </header>
 
     <dl class="metadata-strip">
-      <div><dt>Status</dt><dd>{formatLabel(data.status)}</dd></div>
-      <div><dt>Started</dt><dd><time datetime={data.startDate.toISOString()}>{formatDate(data.startDate)}</time></dd></div>
+      <div>
+        <dt>Status</dt>
+        <dd data-field-display="status" data-value={data.status}>{formatLabel(data.status)}</dd>
+        {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="status" aria-label="Edit the status" set:html={pencil} />}
+      </div>
+      <div>
+        <dt>Started</dt>
+        <dd data-field-display="startDate" data-value={data.startDate.toISOString().slice(0, 10)}><time datetime={data.startDate.toISOString()}>{formatDate(data.startDate)}</time></dd>
+        {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="startDate" aria-label="Edit the start date" set:html={pencil} />}
+      </div>
       <div><dt>Updated</dt><dd><time datetime={data.updatedDate.toISOString()}>{formatDate(data.updatedDate)}</time></dd></div>
     </dl>
 
@@ -101,8 +114,8 @@ const lockedView = publicOnlyBuild && privateProject;
     {!lockedView && (
     <article class="case-study" id="overview">
       <div class="section-kicker"><span>01</span> Overview</div>
-      <div class="section-heading section-heading--detail"><div><h2>Why it was built</h2></div></div>
-      <div class="prose"><p>{data.why}</p></div>
+      <div class="section-heading section-heading--detail"><div><h2>Why it was built {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="why" aria-label="Edit why it was built" set:html={pencil} />}</h2></div></div>
+      <div class="prose"><p data-field-display="why">{data.why}</p></div>
     </article>
     )}
 

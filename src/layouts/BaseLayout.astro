@@ -48,6 +48,11 @@ const avatar = withBase('/profile-avatar-circle.png');
             Share
           </button>
           <a class="site-action" href={withBase('/manage')}>+ Add project</a>
+          {publicOnlyBuild && (
+            <button type="button" class="github-status" data-token-open data-connected="false" aria-label="GitHub connection">
+              <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path></svg>
+            </button>
+          )}
           {!publicOnlyBuild && (
             <div class="local-indicator" title="This portfolio is configured for local use only">
               <span aria-hidden="true"></span>
@@ -64,6 +69,26 @@ const avatar = withBase('/profile-avatar-circle.png');
       <p>Markdown is the record. Git is the history. This interface is the view.</p>
     </footer>
 
+    {publicOnlyBuild && (
+      <dialog class="share-dialog token-dialog" data-token-dialog>
+        <h3>GitHub connection</h3>
+        <p class="remote-editor-hint" data-token-dialog-state>Not connected.</p>
+        <p class="remote-editor-hint">
+          Paste a fine-grained personal access token with <strong>Contents: read and write</strong> on
+          <code>aviman1258/project-workbench</code> (add <code>workbench-private</code> for private projects).
+          It is stored only in this browser.
+          <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">Create one on GitHub ↗</a>
+        </p>
+        <input type="password" class="token-dialog__input" data-token-dialog-input autocomplete="off" placeholder="github_pat_…" />
+        <p class="share-dialog__url" data-token-dialog-status></p>
+        <div class="share-dialog__actions">
+          <button type="button" class="share-dialog__native" data-token-dialog-save>Connect</button>
+          <button type="button" class="share-dialog__close token-dialog__forget" data-token-dialog-forget hidden>Forget token</button>
+          <button type="button" class="share-dialog__close" data-token-dialog-close>Close</button>
+        </div>
+      </dialog>
+    )}
+
     <dialog class="share-dialog" data-share-dialog>
       <h3>Scan to open</h3>
       <canvas data-share-canvas></canvas>
@@ -76,6 +101,45 @@ const avatar = withBase('/profile-avatar-circle.png');
 
     <script>
       import QRCode from 'qrcode';
+      import { TOKEN_EVENT, clearToken, getStoredToken, storeToken, validateToken } from '../lib/github-client';
+
+      // --- header GitHub connection icon + token dialog (hosted builds only) ---
+      const tokenIcon = document.querySelector<HTMLButtonElement>('[data-token-open]');
+      const tokenDialog = document.querySelector<HTMLDialogElement>('[data-token-dialog]');
+      if (tokenIcon && tokenDialog) {
+        const stateLabel = tokenDialog.querySelector<HTMLElement>('[data-token-dialog-state]')!;
+        const input = tokenDialog.querySelector<HTMLInputElement>('[data-token-dialog-input]')!;
+        const status = tokenDialog.querySelector<HTMLElement>('[data-token-dialog-status]')!;
+        const forgetButton = tokenDialog.querySelector<HTMLButtonElement>('[data-token-dialog-forget]')!;
+
+        const refresh = () => {
+          const connected = Boolean(getStoredToken());
+          tokenIcon.dataset.connected = String(connected);
+          tokenIcon.title = connected ? 'GitHub connected' : 'Not connected to GitHub — click to add a token';
+          stateLabel.textContent = connected ? 'Connected — edits commit as aviman1258.' : 'Not connected. Editing needs a token.';
+          forgetButton.hidden = !connected;
+        };
+        refresh();
+        window.addEventListener(TOKEN_EVENT, refresh);
+
+        tokenIcon.addEventListener('click', () => { status.textContent = ''; tokenDialog.showModal(); });
+        tokenDialog.querySelector('[data-token-dialog-close]')?.addEventListener('click', () => tokenDialog.close());
+        tokenDialog.addEventListener('click', (event) => { if (event.target === tokenDialog) tokenDialog.close(); });
+        forgetButton.addEventListener('click', () => { clearToken(); status.textContent = 'Token forgotten.'; });
+        tokenDialog.querySelector('[data-token-dialog-save]')?.addEventListener('click', async () => {
+          const candidate = input.value.trim();
+          if (!candidate) { status.textContent = 'Paste a token first.'; return; }
+          status.textContent = 'Checking access…';
+          try {
+            await validateToken(candidate);
+            storeToken(candidate);
+            input.value = '';
+            status.textContent = 'Connected.';
+          } catch (error) {
+            status.textContent = (error as Error).message || 'That token did not work.';
+          }
+        });
+      }
 
       // The QR always points at the hosted site, even from local dev —
       // sharing a localhost address helps nobody.
