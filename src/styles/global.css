@@ -272,70 +272,6 @@ a {
   letter-spacing: -0.045em;
 }
 
-.sort-controls {
-  display: flex;
-  align-items: end;
-  gap: 8px;
-}
-
-.sort-controls label {
-  flex: 1;
-}
-
-.sort-controls label > span {
-  display: block;
-  margin-bottom: 7px;
-  color: var(--ink-faint);
-  font: 10px/1 var(--mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.sort-controls select {
-  width: 100%;
-  height: 43px;
-  padding: 0 30px 0 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface-strong);
-  color: var(--ink);
-  font-size: 13px;
-}
-
-.sort-direction-button {
-  width: 43px;
-  height: 43px;
-  padding: 0;
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface-strong);
-  color: var(--forest);
-  cursor: pointer;
-}
-
-.sort-direction-button:hover {
-  border-color: var(--forest);
-  background: var(--sage-wash);
-}
-
-.sort-direction-button svg {
-  width: 19px;
-  height: 19px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-  transition: transform 160ms ease;
-}
-
-.sort-direction-button[data-direction="asc"] svg {
-  transform: rotate(180deg);
-}
-
 .filter-panel {
   position: relative;
   z-index: 2;
@@ -352,9 +288,7 @@ a {
 }
 
 .filter-panel__primary {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(220px, auto);
-  gap: 12px;
+  min-width: 0;
 }
 
 .filter-panel label > span {
@@ -3006,10 +2940,6 @@ a {
     border-bottom: 1px solid var(--line);
   }
 
-  .filter-panel__primary {
-    grid-template-columns: 1fr;
-  }
-
   .project-coverflow__stage {
     height: 390px;
     margin-inline: -16px;
@@ -3187,14 +3117,6 @@ a {
 }
 
 @media (max-width: 430px) {
-  .sort-controls {
-    width: 100%;
-  }
-
-  .sort-controls select {
-    width: 100%;
-  }
-
   .project-card__meta,
   .project-sidebar {
     grid-template-columns: 1fr;

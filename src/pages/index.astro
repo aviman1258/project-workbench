@@ -28,10 +28,6 @@ const projects = (await getCollection('projects')).sort((a, b) => b.data.updated
             <span>Search</span>
             <div><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path d="m21 21-4.35-4.35m2.35-5.15a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" /></svg><input data-filter-search type="search" placeholder="Name, description, or why…" autocomplete="off" /></div>
           </label>
-          <div class="sort-controls" aria-label="Sort projects">
-            <label><span>Sort by</span><select data-sort-field><option value="updated">Updated date</option><option value="id">ID</option><option value="name">Alphabetical</option></select></label>
-            <button class="sort-direction-button" type="button" data-sort-direction data-direction="desc" aria-label="Descending order. Activate for ascending order." title="Descending order"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v16m-5-5 5 5 5-5" /></svg></button>
-          </div>
         </div>
         <button class="reset-filters" type="button" data-reset-filters hidden>Clear filters</button>
       </div>
@@ -68,8 +64,6 @@ const projects = (await getCollection('projects')).sort((a, b) => b.data.updated
   const resetButton = document.querySelector<HTMLButtonElement>('[data-reset-filters]');
   const emptyReset = document.querySelector<HTMLButtonElement>('[data-empty-reset]');
   const projectGrid = document.querySelector<HTMLElement>('[data-project-grid]');
-  const sortField = document.querySelector<HTMLSelectElement>('[data-sort-field]');
-  const sortDirection = document.querySelector<HTMLButtonElement>('[data-sort-direction]');
   const unlockPanel = document.querySelector<HTMLElement>('[data-private-unlock-panel]');
   const unlockButton = document.querySelector<HTMLButtonElement>('[data-private-unlock-button]');
   const unlockStatus = document.querySelector<HTMLElement>('[data-private-unlock-status]');
@@ -80,7 +74,6 @@ const projects = (await getCollection('projects')).sort((a, b) => b.data.updated
   const coverflowTotal = document.querySelector<HTMLElement>('[data-project-coverflow-total]');
   const coverflowDots = [...document.querySelectorAll<HTMLButtonElement>('[data-project-coverflow-dot]')];
   let activeCoverflowCard: HTMLElement | null = cards[0] ?? null;
-  const compareText = (left: string, right: string) => left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
 
   const visibleCoverflowCards = () => projectGrid
     ? [...projectGrid.querySelectorAll<HTMLElement>('[data-project-card]')].filter((card) => !card.hidden)
@@ -252,23 +245,6 @@ const projects = (await getCollection('projects')).sort((a, b) => b.data.updated
     }, { passive: true });
   });
 
-  function applySort() {
-    if (!projectGrid) return;
-    const field = sortField?.value ?? 'updated';
-    const direction = sortDirection?.dataset.direction === 'asc' ? 1 : -1;
-    [...cards].sort((left, right) => {
-      let comparison = field === 'id'
-        ? compareText(left.dataset.projectId ?? '', right.dataset.projectId ?? '')
-        : field === 'name'
-          ? compareText(left.dataset.projectName ?? '', right.dataset.projectName ?? '')
-          : Number(left.dataset.projectUpdated ?? 0) - Number(right.dataset.projectUpdated ?? 0);
-      if (comparison === 0) comparison = compareText(left.dataset.projectId ?? '', right.dataset.projectId ?? '');
-      return comparison * direction;
-    }).forEach((card) => projectGrid.append(card));
-    activeCoverflowCard = null;
-    showCoverflowCard(0);
-  }
-
   function applyFilters() {
     const query = searchInput?.value.trim().toLowerCase() ?? '';
     const activeFilters = Object.fromEntries(selects.map((select) => [select.dataset.filter ?? '', select.value]));
@@ -296,16 +272,7 @@ const projects = (await getCollection('projects')).sort((a, b) => b.data.updated
 
   searchInput?.addEventListener('input', applyFilters);
   selects.forEach((select) => select.addEventListener('change', applyFilters));
-  sortField?.addEventListener('change', applySort);
-  sortDirection?.addEventListener('click', () => {
-    const nextDirection = sortDirection.dataset.direction === 'asc' ? 'desc' : 'asc';
-    sortDirection.dataset.direction = nextDirection;
-    const currentLabel = nextDirection === 'asc' ? 'Ascending' : 'Descending';
-    sortDirection.setAttribute('aria-label', `${currentLabel} order. Activate for ${nextDirection === 'asc' ? 'descending' : 'ascending'} order.`);
-    sortDirection.title = `${currentLabel} order`;
-    applySort();
-  });
   resetButton?.addEventListener('click', resetFilters);
   emptyReset?.addEventListener('click', resetFilters);
-  applySort();
+  showCoverflowCard(0);
 </script>
