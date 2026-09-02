@@ -57,7 +57,7 @@ const { data } = project;
 
 <script>
   import { parse, stringify } from 'yaml';
-  import { encodeText, getFile, putFile, wireTokenPanel } from '../lib/github-client';
+  import { deleteFile, encodeText, getFile, putFile, wireTokenPanel } from '../lib/github-client';
 
   const root = document.querySelector<HTMLElement>('[data-remote-editor]');
   if (root) {
@@ -65,6 +65,10 @@ const { data } = project;
     const indexPath = `src/content/projects/${folder}/index.md`;
     const editPanel = root.querySelector<HTMLDetailsElement>('[data-remote-edit-panel]')!;
     const mediaPanel = root.querySelector<HTMLDetailsElement>('[data-remote-media-panel]')!;
+    const mediaStatus = document.querySelector<HTMLElement>('[data-media-status]');
+    const deleteDialog = document.querySelector<HTMLDialogElement>('[data-media-delete-dialog]');
+    const deleteName = deleteDialog?.querySelector<HTMLElement>('[data-media-delete-name]');
+    let pendingDelete = '';
 
     let token = '';
     const connection = wireTokenPanel(root, (next) => {
@@ -82,6 +86,12 @@ const { data } = project;
     });
     const handleAuthFailure = (error: unknown) => {
       if ((error as { status?: number }).status === 401) connection.invalidate();
+    };
+
+    const showConnectPanel = () => {
+      const tokenPanel = root.querySelector<HTMLDetailsElement>('[data-remote-token-panel]');
+      if (tokenPanel) tokenPanel.open = true;
+      root.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
     const patchFrontmatter = async (patch: Record<string, unknown>, message: string) => {
@@ -127,19 +137,19 @@ const { data } = project;
 
     // --- add media ---
     const mediaInput = root.querySelector<HTMLInputElement>('[data-remote-media-input]')!;
-    const mediaStatus = root.querySelector<HTMLElement>('[data-remote-media-status]')!;
+    const uploadStatus = root.querySelector<HTMLElement>('[data-remote-media-status]')!;
     root.querySelector('[data-remote-media-upload]')?.addEventListener('click', async () => {
       const file = mediaInput.files?.[0];
-      if (!file) { mediaStatus.textContent = 'Choose a file first.'; return; }
-      if (!/\.(png|jpe?g|pdf|mp4)$/i.test(file.name)) { mediaStatus.textContent = 'PNG, JPG, PDF, or MP4 only.'; return; }
-      if (file.size > 20 * 1024 * 1024) { mediaStatus.textContent = 'Keep files under 20 MB.'; return; }
+      if (!file) { uploadStatus.textContent = 'Choose a file first.'; return; }
+      if (!/\.(png|jpe?g|pdf|mp4)$/i.test(file.name)) { uploadStatus.textContent = 'PNG, JPG, PDF, or MP4 only.'; return; }
+      if (file.size > 20 * 1024 * 1024) { uploadStatus.textContent = 'Keep files under 20 MB.'; return; }
 
       const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
       const stem = file.name.slice(0, file.name.lastIndexOf('.')).replace(/[^a-zA-Z0-9._-]+/g, '-') || 'media';
       const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
       const filename = `${stem}-${stamp}${extension}`;
 
-      mediaStatus.textContent = `Uploading ${filename}…`;
+      uploadStatus.textContent = `Uploading ${filename}…`;
       try {
         const dataUrl = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
@@ -155,10 +165,49 @@ const { data } = project;
         );
         await patchFrontmatter({}, `Touch updated date for ${filename}`);
         mediaInput.value = '';
-        mediaStatus.textContent = 'Committed. The site rebuilds in about a minute.';
+        uploadStatus.textContent = 'Committed. The site rebuilds in about a minute.';
       } catch (error) {
         handleAuthFailure(error);
-        mediaStatus.textContent = (error as Error).message || 'The upload failed.';
+        uploadStatus.textContent = (error as Error).message || 'The upload failed.';
+      }
+    });
+
+    // The carousel uses the same confirmation dialog as the local editor. On the
+    // hosted site, confirming commits the file deletion through the GitHub API.
+    document.querySelectorAll<HTMLButtonElement>('[data-media-delete-trigger]').forEach((trigger) => {
+      trigger.addEventListener('click', () => {
+        pendingDelete = trigger.dataset.filename ?? '';
+        if (!pendingDelete || !deleteDialog) return;
+        if (deleteName) deleteName.textContent = pendingDelete;
+        deleteDialog.showModal();
+      });
+    });
+    deleteDialog?.querySelector('[data-media-delete-cancel]')?.addEventListener('click', () => deleteDialog.close());
+    deleteDialog?.querySelector<HTMLButtonElement>('[data-media-delete-confirm]')?.addEventListener('click', async (event) => {
+      const confirmButton = event.currentTarget as HTMLButtonElement;
+      if (!pendingDelete) return;
+      if (!token) {
+        deleteDialog.close();
+        if (mediaStatus) mediaStatus.textContent = 'Connect GitHub before deleting an artifact.';
+        showConnectPanel();
+        return;
+      }
+      confirmButton.disabled = true;
+      if (mediaStatus) mediaStatus.textContent = `Deleting ${pendingDelete}…`;
+      try {
+        await deleteFile(
+          token,
+          `src/content/projects/${folder}/artifacts/${pendingDelete}`,
+          `Delete ${pendingDelete} from the hosted editor`,
+        );
+        deleteDialog.close();
+        if (mediaStatus) mediaStatus.textContent = 'Deleted. The carousel will update after the site rebuilds in about a minute.';
+      } catch (error) {
+        handleAuthFailure(error);
+        deleteDialog.close();
+        if (mediaStatus) mediaStatus.textContent = (error as Error).message || 'The artifact could not be deleted.';
+      } finally {
+        confirmButton.disabled = false;
       }
     });
   }

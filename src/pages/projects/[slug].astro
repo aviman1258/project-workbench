@@ -136,6 +136,9 @@ const lockedView = publicOnlyBuild && privateProject;
                       <div class="artifact-slide__document" data-pdf-preview={artifact.kind === 'pdf' ? artifact.href : undefined}><span aria-hidden="true">▤</span><strong>{artifact.kind.toUpperCase()}</strong><small>Open to preview</small></div>
                     )}
                   </a>
+                  <button type="button" class="artifact-slide__delete" data-media-delete-trigger data-filename={artifact.filename} aria-label={`Delete ${artifact.filename}`} title={`Delete ${artifact.filename}`}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+                  </button>
                   <figcaption>
                     <div><strong>{artifact.filename}</strong><span>{formatLabel(artifact.kind)}</span></div>
                     <a href={artifact.href} target="_blank" rel="noreferrer">Open original ↗</a>
@@ -188,16 +191,14 @@ const lockedView = publicOnlyBuild && privateProject;
         </button>
       )}
 
-      {!publicOnlyBuild && (
       <dialog class="media-delete-dialog" data-media-delete-dialog>
-        <h3>Delete this media?</h3>
+        <h3>Delete this artifact?</h3>
         <p><strong data-media-delete-name></strong> will be removed from the project folder. This cannot be undone.</p>
         <div class="media-delete-dialog__actions">
           <button type="button" class="media-delete-dialog__cancel" data-media-delete-cancel>Cancel</button>
           <button type="button" class="media-delete-dialog__confirm" data-media-delete-confirm>Delete</button>
         </div>
       </dialog>
-      )}
     </section>
     )}
   </div>
@@ -617,6 +618,17 @@ const lockedView = publicOnlyBuild && privateProject;
     let dragJustEnded = false;
     let pendingDrag: { tile: HTMLElement; x: number; y: number; timer: number } | null = null;
 
+    const openDeleteDialog = (filename: string) => {
+      pendingDelete = filename;
+      if (!pendingDelete || !deleteDialog) return;
+      if (deleteName) deleteName.textContent = pendingDelete;
+      deleteDialog.showModal();
+    };
+
+    mediaSection.querySelectorAll<HTMLButtonElement>('[data-media-delete-trigger]').forEach((trigger) => {
+      trigger.addEventListener('click', () => openDeleteDialog(trigger.dataset.filename ?? ''));
+    });
+
     const tileOrder = () =>
       [...(tilesRow?.querySelectorAll<HTMLElement>('[data-media-tile]') ?? [])].map((tile) => tile.dataset.filename ?? '');
     const restoreTileOrder = () => tileSnapshot.forEach((tile) => tilesRow?.appendChild(tile));
@@ -701,9 +713,7 @@ const lockedView = publicOnlyBuild && privateProject;
       const under = document.elementFromPoint(event.clientX, event.clientY);
       if (under?.closest('[data-media-trash]')) {
         restoreTileOrder();
-        pendingDelete = tile.dataset.filename ?? '';
-        if (deleteName) deleteName.textContent = pendingDelete;
-        deleteDialog?.showModal();
+        openDeleteDialog(tile.dataset.filename ?? '');
         return;
       }
 

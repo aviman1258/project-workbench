@@ -68,6 +68,15 @@ export function putFile(token: string, path: string, contentBase64: string, mess
   });
 }
 
+export async function deleteFile(token: string, path: string, message: string) {
+  const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+  const file = await gh(token, `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${encodedPath}?ref=${GITHUB_BRANCH}`);
+  return gh(token, `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${encodedPath}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ message, sha: String(file.sha), branch: GITHUB_BRANCH }),
+  });
+}
+
 export async function listProjectFolders(token: string): Promise<string[]> {
   const entries = await gh(token, `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/src/content/projects?ref=${GITHUB_BRANCH}`);
   return (entries as unknown as { type: string; name: string }[])
