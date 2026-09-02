@@ -1,7 +1,6 @@
 ---
 import { projectStatuses } from '../lib/project-schema';
 import { formatLabel, withBase } from '../lib/projects';
-import GitHubConnect from './GitHubConnect.astro';
 
 // Hosted-site "Add project": creates the project folder in the GitHub repo.
 // Hosted creations are always public — private projects are made in the local workbench.
@@ -15,7 +14,9 @@ const today = new Date().toISOString().slice(0, 10);
   </div>
 
   <div class="project-editor__tools" data-remote-create data-projects-base={withBase('/projects')}>
-    <GitHubConnect />
+    <p class="remote-editor-hint" data-remote-create-connect-hint>
+      Connect GitHub with the icon in the header to add a project.
+    </p>
 
     <details data-remote-create-panel hidden open>
       <summary><span aria-hidden="true">＋</span><span>New project</span></summary>
@@ -40,18 +41,23 @@ const today = new Date().toISOString().slice(0, 10);
 
 <script>
   import { stringify } from 'yaml';
-  import { encodeText, listProjectFolders, putFile, wireTokenPanel } from '../lib/github-client';
+  import { clearToken, encodeText, getStoredToken, listProjectFolders, putFile, TOKEN_EVENT } from '../lib/github-client';
 
   const root = document.querySelector<HTMLElement>('[data-remote-create]');
   if (root) {
     const projectsBase = root.dataset.projectsBase ?? '/projects';
     const panel = root.querySelector<HTMLDetailsElement>('[data-remote-create-panel]')!;
+    const connectHint = root.querySelector<HTMLElement>('[data-remote-create-connect-hint]')!;
 
+    // Connection lives in the header GitHub icon; this form just follows it.
     let token = '';
-    const connection = wireTokenPanel(root, (next) => {
-      token = next;
+    const sync = () => {
+      token = getStoredToken();
       panel.hidden = !token;
-    });
+      connectHint.hidden = Boolean(token);
+    };
+    sync();
+    window.addEventListener(TOKEN_EVENT, sync);
 
     const form = root.querySelector<HTMLFormElement>('[data-remote-create-form]')!;
     const status = root.querySelector<HTMLElement>('[data-remote-create-status]')!;
@@ -113,7 +119,11 @@ const today = new Date().toISOString().slice(0, 10);
         note.append(link, '.');
         status.append(note);
       } catch (error) {
-        if ((error as { status?: number }).status === 401) connection.invalidate();
+        if ((error as { status?: number }).status === 401) {
+          clearToken();
+          status.textContent = 'GitHub rejected the token — reconnect with the icon in the header.';
+          return;
+        }
         status.textContent = (error as Error).message || 'The project could not be created.';
       } finally {
         submit.disabled = false;

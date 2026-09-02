@@ -1949,6 +1949,11 @@ body:not([data-github-connected='true']) .inline-edit,
   display: none;
 }
 
+/* on the hosted site, Add project only shows while connected to GitHub */
+body:not([data-github-connected='true']) .site-action--needs-github {
+  display: none;
+}
+
 .inline-editable > .inline-edit {
   position: absolute;
   top: -10px;
@@ -3214,23 +3219,6 @@ body:not([data-github-connected='true']) .inline-edit,
   color: var(--forest);
   font: 700 11px/1 var(--mono);
   list-style: none;
-}
-
-/* connection state on the GitHub token panel: green when connected, red outline when not */
-.remote-token-panel[data-connected='true'] > summary {
-  background: var(--forest);
-  color: #fff;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-}
-
-.remote-token-panel[data-connected='true']:not([open]) > summary {
-  border-radius: var(--radius-sm);
-}
-
-.remote-token-panel[data-connected='false'] > summary {
-  box-shadow: inset 0 0 0 1.5px var(--red);
-  border-radius: var(--radius-sm);
-  color: var(--red);
 }
 
 .project-editor summary::-webkit-details-marker {
