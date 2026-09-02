@@ -132,6 +132,20 @@ const projects = (await getCollection('projects')).sort((a, b) => b.data.updated
     if (event.key === 'ArrowLeft') { event.preventDefault(); moveCoverflow(-1); }
     if (event.key === 'ArrowRight') { event.preventDefault(); moveCoverflow(1); }
   });
+  // swipe left/right on touch devices; vertical scrolling stays untouched
+  let coverflowTouchX = 0;
+  let coverflowTouchY = 0;
+  projectCoverflow?.addEventListener('touchstart', (event) => {
+    coverflowTouchX = event.changedTouches[0]?.clientX ?? 0;
+    coverflowTouchY = event.changedTouches[0]?.clientY ?? 0;
+  }, { passive: true });
+  projectCoverflow?.addEventListener('touchend', (event) => {
+    const deltaX = (event.changedTouches[0]?.clientX ?? coverflowTouchX) - coverflowTouchX;
+    const deltaY = (event.changedTouches[0]?.clientY ?? coverflowTouchY) - coverflowTouchY;
+    if (Math.abs(deltaX) > 44 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+      moveCoverflow(deltaX < 0 ? 1 : -1);
+    }
+  }, { passive: true });
   coverflowDots.forEach((dot) => dot.addEventListener('click', () => {
     const card = cards.find((candidate) => candidate.dataset.projectId === dot.dataset.projectId);
     if (card) showCoverflowCard(card);
