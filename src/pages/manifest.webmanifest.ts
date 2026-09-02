@@ -7,7 +7,7 @@ export const GET: APIRoute = () =>
   new Response(
     JSON.stringify({
       name: "Avishek's Project Workbench",
-      short_name: 'Workbench',
+      short_name: 'Avishek',
       description: 'A portfolio of product ideas, experiments, and shipped work.',
       id: withBase('/'),
       start_url: withBase('/'),
