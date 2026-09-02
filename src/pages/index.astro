@@ -57,9 +57,7 @@ const projects = (await getCollection('projects')).sort((a, b) => b.data.updated
   } from '@simplewebauthn/browser';
 
   const searchInput = document.querySelector<HTMLInputElement>('[data-filter-search]');
-  const selects = [...document.querySelectorAll<HTMLSelectElement>('[data-filter]')];
   const cards = [...document.querySelectorAll<HTMLElement>('[data-project-card]')];
-  const resultCount = document.querySelector<HTMLElement>('[data-result-count]');
   const emptyState = document.querySelector<HTMLElement>('[data-empty-results]');
   const resetButton = document.querySelector<HTMLButtonElement>('[data-reset-filters]');
   const emptyReset = document.querySelector<HTMLButtonElement>('[data-empty-reset]');
@@ -209,69 +207,26 @@ const projects = (await getCollection('projects')).sort((a, b) => b.data.updated
     if (unlockStatus) unlockStatus.textContent = 'This project is locked. Select unlock to continue.';
   }
 
-  document.querySelectorAll<HTMLElement>('[data-project-carousel]').forEach((carousel) => {
-    const track = carousel.querySelector<HTMLElement>('[data-project-carousel-track]');
-    const slides = [...carousel.querySelectorAll<HTMLElement>('[data-project-carousel-slide]')];
-    const dots = [...carousel.querySelectorAll<HTMLButtonElement>('[data-project-carousel-dot]')];
-    let current = 0;
-    let touchStartX = 0;
-
-    const show = (next: number) => {
-      if (!track || slides.length === 0) return;
-      current = (next + slides.length) % slides.length;
-      track.style.transform = `translateX(-${current * 100}%)`;
-      slides.forEach((slide, index) => {
-        slide.setAttribute('aria-hidden', String(index !== current));
-        slide.setAttribute('tabindex', index === current ? '0' : '-1');
-      });
-      dots.forEach((dot, index) => {
-        dot.dataset.active = String(index === current);
-        if (index === current) dot.setAttribute('aria-current', 'true');
-        else dot.removeAttribute('aria-current');
-      });
-    };
-
-    carousel.querySelector<HTMLButtonElement>('[data-project-carousel-previous]')?.addEventListener('click', () => show(current - 1));
-    carousel.querySelector<HTMLButtonElement>('[data-project-carousel-next]')?.addEventListener('click', () => show(current + 1));
-    dots.forEach((dot, index) => dot.addEventListener('click', () => show(index)));
-    carousel.addEventListener('keydown', (event) => {
-      if (event.key === 'ArrowLeft') { event.preventDefault(); show(current - 1); }
-      if (event.key === 'ArrowRight') { event.preventDefault(); show(current + 1); }
-    });
-    carousel.addEventListener('touchstart', (event) => { touchStartX = event.changedTouches[0]?.clientX ?? 0; }, { passive: true });
-    carousel.addEventListener('touchend', (event) => {
-      const distance = (event.changedTouches[0]?.clientX ?? touchStartX) - touchStartX;
-      if (Math.abs(distance) > 40) show(current + (distance < 0 ? 1 : -1));
-    }, { passive: true });
-  });
-
   function applyFilters() {
     const query = searchInput?.value.trim().toLowerCase() ?? '';
-    const activeFilters = Object.fromEntries(selects.map((select) => [select.dataset.filter ?? '', select.value]));
     let visible = 0;
     cards.forEach((card) => {
-      const matches = (!query || (card.dataset.search ?? '').includes(query))
-        && (!activeFilters.status || card.dataset.status === activeFilters.status)
-        && (!activeFilters.privacy || card.dataset.privacy === activeFilters.privacy);
+      const matches = !query || (card.dataset.search ?? '').includes(query);
       card.hidden = !matches;
       if (matches) visible += 1;
     });
-    const hasFilters = Boolean(query || Object.values(activeFilters).some(Boolean));
-    if (resultCount) resultCount.textContent = String(visible);
     if (emptyState) emptyState.hidden = visible !== 0;
-    if (resetButton) resetButton.hidden = !hasFilters;
+    if (resetButton) resetButton.hidden = !query;
     showCoverflowCard(activeCoverflowCard ?? 0);
   }
 
   function resetFilters() {
     if (searchInput) searchInput.value = '';
-    selects.forEach((select) => (select.value = ''));
     applyFilters();
     searchInput?.focus();
   }
 
   searchInput?.addEventListener('input', applyFilters);
-  selects.forEach((select) => select.addEventListener('change', applyFilters));
   resetButton?.addEventListener('click', resetFilters);
   emptyReset?.addEventListener('click', resetFilters);
   showCoverflowCard(0);

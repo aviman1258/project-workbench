@@ -7,11 +7,12 @@ why: Built to keep project documentation and evidence tied to plain files under 
 status: dev
 privacy: public
 startDate: 2026-09-01
-updatedDate: 2026-09-01
+updatedDate: 2026-09-02
 artifactOrder:
   - portfolio-workbench-project-index.png
   - portfolio-workbench-project-editor.png
   - portfolio-workbench-add-project.png
+featuredArtifact: portfolio-workbench-project-index.png
 ---
 
 ## What I Built

@@ -120,11 +120,14 @@ async function touchProjectUpdated(projectRoot: string, patch: Record<string, un
   const source = await readFile(indexPath, 'utf8');
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(source);
   if (!match) throw new EditorError('Project index.md is missing YAML front matter.', 500);
-  const metadata = {
+  const metadata: Record<string, unknown> = {
     ...(parse(match[1]) as Record<string, unknown>),
     ...patch,
     updatedDate: new Date().toISOString().slice(0, 10),
   };
+  for (const key of Object.keys(metadata)) {
+    if (metadata[key] === undefined) delete metadata[key];
+  }
   projectMetadataSchema.parse(metadata);
   const body = source.slice(match[0].length).replace(/^\r?\n/, '');
   await writeFile(indexPath, `---\n${stringify(metadata, { lineWidth: 0 }).trimEnd()}\n---\n\n${body}`, 'utf8');
@@ -237,6 +240,7 @@ async function updateProject(projectsRoot: string, slug: string, rawInput: unkno
     startDate: update.startDate,
     updatedDate: new Date().toISOString().slice(0, 10),
     ...(existing.artifactOrder !== undefined ? { artifactOrder: existing.artifactOrder } : {}),
+    ...(existing.featuredArtifact !== undefined ? { featuredArtifact: existing.featuredArtifact } : {}),
   };
 
   projectMetadataSchema.parse(metadata);
@@ -281,7 +285,9 @@ async function addArtifact(projectsRoot: string, slug: string, rawInput: unknown
   while (existing.has(finalName)) finalName = `${stem}-${suffix++}${extension}`;
 
   await writeFile(path.join(artifactsRoot, finalName), contents, { flag: 'wx' });
-  await touchProjectUpdated(projectRoot);
+  // the first artifact a project gets becomes its featured artifact
+  const metadata = parseFrontmatter(await readFile(path.join(projectRoot, 'index.md'), 'utf8'));
+  await touchProjectUpdated(projectRoot, metadata.featuredArtifact ? {} : { featuredArtifact: finalName });
   return { filename: finalName };
 }
 
@@ -331,9 +337,29 @@ async function deleteArtifact(projectsRoot: string, slug: string, rawInput: unkn
 
   const metadata = parseFrontmatter(await readFile(path.join(projectRoot, 'index.md'), 'utf8'));
   const currentOrder = Array.isArray(metadata.artifactOrder) ? (metadata.artifactOrder as string[]) : undefined;
-  const patch = currentOrder ? { artifactOrder: currentOrder.filter((name) => name !== filename) } : {};
+  const patch: Record<string, unknown> = currentOrder
+    ? { artifactOrder: currentOrder.filter((name) => name !== filename) }
+    : {};
+  // deleting the featured artifact promotes the next one (display order first)
+  if (metadata.featuredArtifact === filename) {
+    const remaining = await listArtifactFiles(projectRoot);
+    const ordered = (patch.artifactOrder as string[] | undefined)?.filter((name) => remaining.has(name)) ?? [];
+    patch.featuredArtifact = ordered[0] ?? [...remaining].sort()[0] ?? undefined;
+  }
   await touchProjectUpdated(projectRoot, patch);
   return { deleted: filename };
+}
+
+async function featureArtifact(projectsRoot: string, slug: string, rawInput: unknown) {
+  if (!rawInput || typeof rawInput !== 'object') throw new EditorError('Artifact details are invalid.', 400, 'artifact');
+  const filename = artifactNameOrThrow((rawInput as Record<string, unknown>).filename);
+
+  const projectRoot = await findProjectFolder(projectsRoot, slug);
+  const existing = await listArtifactFiles(projectRoot);
+  if (!existing.has(filename)) throw new EditorError(`No artifact named "${filename}" exists.`, 404, 'artifact');
+
+  await touchProjectUpdated(projectRoot, { featuredArtifact: filename });
+  return { featured: filename };
 }
 
 export function localEditorPlugin(projectsRoot = defaultProjectsRoot): Plugin {
@@ -483,6 +509,14 @@ export function localEditorPlugin(projectsRoot = defaultProjectsRoot): Plugin {
             const slug = decodeURIComponent(orderMatch[1]);
             if (await isPrivateProject(projectsRoot, slug)) requireDeviceUnlock(request);
             sendJson(response, 200, await reorderArtifacts(projectsRoot, slug, body));
+            return;
+          }
+
+          const featureMatch = /^\/api\/local\/projects\/([^/]+)\/artifacts\/feature$/.exec(pathname);
+          if (featureMatch) {
+            const slug = decodeURIComponent(featureMatch[1]);
+            if (await isPrivateProject(projectsRoot, slug)) requireDeviceUnlock(request);
+            sendJson(response, 200, await featureArtifact(projectsRoot, slug, body));
             return;
           }
 

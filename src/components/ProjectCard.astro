@@ -1,6 +1,6 @@
 ---
 import type { CollectionEntry } from 'astro:content';
-import { loadArtifacts, publicOnlyBuild, withBase } from '../lib/projects';
+import { featuredArtifact, loadArtifacts, publicOnlyBuild, withBase } from '../lib/projects';
 
 interface Props {
   project: CollectionEntry<'projects'>;
@@ -9,6 +9,7 @@ interface Props {
 const { project } = Astro.props;
 const { data } = project;
 const artifacts = await loadArtifacts(project);
+const hero = featuredArtifact(project, artifacts);
 const searchValue = [data.name, data.description, data.why].join(' ').toLowerCase();
 const privateProject = data.privacy === 'private';
 ---
@@ -32,41 +33,21 @@ const privateProject = data.privacy === 'private';
       </span>
       <strong>Unlock private project</strong>
     </a>
-  ) : artifacts.length > 0 ? (
-    <div class="project-card__carousel" data-project-carousel tabindex={artifacts.length > 1 ? '0' : undefined} aria-label={`${data.name} artifacts`}>
+  ) : hero ? (
+    <div class="project-card__carousel" aria-label={`${data.name} featured artifact`}>
       <div class="project-card__carousel-viewport">
-        <div class="project-card__carousel-track" data-project-carousel-track>
-          {artifacts.map((artifact, index) => (
-            <a
-              class="project-card__artifact"
-              data-project-carousel-slide
-              href={withBase(`/projects/${data.slug}#edit`)}
-              aria-label={`Edit ${data.name}`}
-              aria-hidden={index === 0 ? 'false' : 'true'}
-              tabindex={index === 0 ? undefined : '-1'}
-            >
-              {artifact.kind === 'image' ? (
-                <img src={artifact.href} alt={`Preview of ${artifact.filename}`} loading={index === 0 ? 'eager' : 'lazy'} />
-              ) : artifact.kind === 'video' ? (
-                <video src={artifact.href} muted playsinline preload="metadata"></video>
-              ) : (
-                <span class="project-card__document-preview"><b aria-hidden="true">▤</b><strong>{artifact.kind.toUpperCase()}</strong></span>
-              )}
-            </a>
-          ))}
+        <div class="project-card__carousel-track">
+          <a class="project-card__artifact" href={withBase(`/projects/${data.slug}#edit`)} aria-label={`Edit ${data.name}`}>
+            {hero.kind === 'image' ? (
+              <img src={hero.href} alt={`Preview of ${hero.filename}`} loading="eager" />
+            ) : hero.kind === 'video' ? (
+              <video src={hero.href} muted playsinline preload="metadata"></video>
+            ) : (
+              <span class="project-card__document-preview"><b aria-hidden="true">▤</b><strong>{hero.kind.toUpperCase()}</strong></span>
+            )}
+          </a>
         </div>
       </div>
-      {artifacts.length > 1 && (
-        <>
-          <button class="project-card__carousel-button project-card__carousel-button--previous" type="button" data-project-carousel-previous aria-label={`Show previous artifact for ${data.name}`}>←</button>
-          <button class="project-card__carousel-button project-card__carousel-button--next" type="button" data-project-carousel-next aria-label={`Show next artifact for ${data.name}`}>→</button>
-          <div class="project-card__carousel-dots" aria-label={`Choose an artifact for ${data.name}`}>
-            {artifacts.map((artifact, index) => (
-              <button type="button" data-project-carousel-dot data-active={index === 0 ? 'true' : 'false'} aria-label={`Show ${artifact.filename}`} aria-current={index === 0 ? 'true' : undefined}></button>
-            ))}
-          </div>
-        </>
-      )}
     </div>
   ) : (
     <a class="project-card__empty" href={withBase(`/projects/${data.slug}`)}>

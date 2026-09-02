@@ -2,7 +2,7 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
 import StatusBadge from '../../components/StatusBadge.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { formatDate, formatLabel, getProjectFolder, loadArtifacts, publicOnlyBuild, withBase } from '../../lib/projects';
+import { featuredArtifact, formatDate, formatLabel, getProjectFolder, loadArtifacts, publicOnlyBuild, withBase } from '../../lib/projects';
 import RemoteEditor from '../../components/RemoteEditor.astro';
 import PrivateVault from '../../components/PrivateVault.astro';
 import { privacyLevels, projectStatuses } from '../../lib/project-schema';
@@ -22,6 +22,7 @@ const { data } = project;
 const artifacts = await loadArtifacts(project);
 const privateProject = data.privacy === 'private';
 const projectFolder = await getProjectFolder(project);
+const heroArtifact = featuredArtifact(project, artifacts);
 const lockedView = publicOnlyBuild && privateProject;
 ---
 
@@ -136,6 +137,9 @@ const lockedView = publicOnlyBuild && privateProject;
                       <div class="artifact-slide__document" data-pdf-preview={artifact.kind === 'pdf' ? artifact.href : undefined}><span aria-hidden="true">▤</span><strong>{artifact.kind.toUpperCase()}</strong><small>Open to preview</small></div>
                     )}
                   </a>
+                  <button type="button" class="artifact-slide__feature" data-media-feature-trigger data-filename={artifact.filename} data-featured={artifact.filename === heroArtifact?.filename ? 'true' : 'false'} aria-label={artifact.filename === heroArtifact?.filename ? `${artifact.filename} is the featured artifact` : `Feature ${artifact.filename}`} title="Featured artifact shows on the project card">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2.6 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3-5.8 3 1.1-6.5L2.6 9.4l6.5-.9z"></path></svg>
+                  </button>
                   <button type="button" class="artifact-slide__delete" data-media-delete-trigger data-filename={artifact.filename} aria-label={`Delete ${artifact.filename}`} title={`Delete ${artifact.filename}`}>
                     <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
                   </button>
@@ -627,6 +631,26 @@ const lockedView = publicOnlyBuild && privateProject;
 
     mediaSection.querySelectorAll<HTMLButtonElement>('[data-media-delete-trigger]').forEach((trigger) => {
       trigger.addEventListener('click', () => openDeleteDialog(trigger.dataset.filename ?? ''));
+    });
+
+    // starring an artifact makes it the project's featured artifact (the card hero)
+    mediaSection.querySelectorAll<HTMLButtonElement>('[data-media-feature-trigger]').forEach((trigger) => {
+      trigger.addEventListener('click', async () => {
+        const filename = trigger.dataset.filename ?? '';
+        if (!filename || trigger.dataset.featured === 'true') return;
+        setMediaStatus(`Featuring ${filename}…`);
+        try {
+          await postJson(`/api/local/projects/${mediaSlug}/artifacts/feature`, { filename });
+          mediaSection.querySelectorAll<HTMLButtonElement>('[data-media-feature-trigger]').forEach((star) => {
+            star.dataset.featured = String(star === trigger);
+          });
+          rememberScroll();
+          setMediaStatus(`${filename} is now featured. Refreshing…`);
+          window.setTimeout(() => window.location.reload(), 2000);
+        } catch (error) {
+          mediaFailure(error, 'The artifact could not be featured.');
+        }
+      });
     });
 
     const tileOrder = () =>

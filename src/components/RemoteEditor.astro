@@ -94,11 +94,18 @@ const { data } = project;
       root.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
-    const patchFrontmatter = async (patch: Record<string, unknown>, message: string) => {
+    // mutate receives the current front matter and edits it in place; undefined
+    // values are removed. updatedDate is always bumped.
+    const patchFrontmatter = async (mutate: (metadata: Record<string, unknown>) => void, message: string) => {
       const { sha, text } = await getFile(token, indexPath);
       const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
       if (!match) throw new Error('index.md is missing YAML front matter.');
-      const metadata = { ...(parse(match[1]) as Record<string, unknown>), ...patch, updatedDate: new Date().toISOString().slice(0, 10) };
+      const metadata = { ...(parse(match[1]) as Record<string, unknown>) };
+      mutate(metadata);
+      metadata.updatedDate = new Date().toISOString().slice(0, 10);
+      for (const key of Object.keys(metadata)) {
+        if (metadata[key] === undefined) delete metadata[key];
+      }
       const body = text.slice(match[0].length).replace(/^\r?\n/, '');
       const next = `---\n${stringify(metadata, { lineWidth: 0 }).trimEnd()}\n---\n${body ? `\n${body}` : ''}`;
       await putFile(token, indexPath, encodeText(next), message, sha);
@@ -125,7 +132,7 @@ const { data } = project;
       submit.disabled = true;
       editStatus.textContent = 'Committing…';
       try {
-        await patchFrontmatter(fields, `Update ${fields.name} from the hosted editor`);
+        await patchFrontmatter((metadata) => Object.assign(metadata, fields), `Update ${fields.name} from the hosted editor`);
         editStatus.textContent = 'Committed. The site rebuilds in about a minute.';
       } catch (error) {
         handleAuthFailure(error);
@@ -163,13 +170,40 @@ const { data } = project;
           dataUrl.slice(dataUrl.indexOf(',') + 1),
           `Add ${filename} from the hosted editor`,
         );
-        await patchFrontmatter({}, `Touch updated date for ${filename}`);
+        await patchFrontmatter((metadata) => {
+          // the first artifact a project gets becomes its featured artifact
+          if (!metadata.featuredArtifact) metadata.featuredArtifact = filename;
+        }, `Touch updated date for ${filename}`);
         mediaInput.value = '';
         uploadStatus.textContent = 'Committed. The site rebuilds in about a minute.';
       } catch (error) {
         handleAuthFailure(error);
         uploadStatus.textContent = (error as Error).message || 'The upload failed.';
       }
+    });
+
+    // Starring an artifact makes it the featured artifact (the project-card hero).
+    document.querySelectorAll<HTMLButtonElement>('[data-media-feature-trigger]').forEach((trigger) => {
+      trigger.addEventListener('click', async () => {
+        const filename = trigger.dataset.filename ?? '';
+        if (!filename || trigger.dataset.featured === 'true') return;
+        if (!token) {
+          if (mediaStatus) mediaStatus.textContent = 'Connect GitHub before featuring an artifact.';
+          showConnectPanel();
+          return;
+        }
+        if (mediaStatus) mediaStatus.textContent = `Featuring ${filename}…`;
+        try {
+          await patchFrontmatter((metadata) => { metadata.featuredArtifact = filename; }, `Feature ${filename}`);
+          document.querySelectorAll<HTMLButtonElement>('[data-media-feature-trigger]').forEach((star) => {
+            star.dataset.featured = String(star === trigger);
+          });
+          if (mediaStatus) mediaStatus.textContent = `${filename} is now featured. The card updates after the site rebuilds.`;
+        } catch (error) {
+          handleAuthFailure(error);
+          if (mediaStatus) mediaStatus.textContent = (error as Error).message || 'The artifact could not be featured.';
+        }
+      });
     });
 
     // The carousel uses the same confirmation dialog as the local editor. On the
@@ -200,6 +234,17 @@ const { data } = project;
           `src/content/projects/${folder}/artifacts/${pendingDelete}`,
           `Delete ${pendingDelete} from the hosted editor`,
         );
+        // deleting the featured artifact promotes the next remaining one
+        const deleted = pendingDelete;
+        const remaining = [...document.querySelectorAll<HTMLElement>('[data-media-delete-trigger]')]
+          .map((trigger) => trigger.dataset.filename ?? '')
+          .filter((name) => name && name !== deleted);
+        await patchFrontmatter((metadata) => {
+          if (Array.isArray(metadata.artifactOrder)) {
+            metadata.artifactOrder = (metadata.artifactOrder as string[]).filter((name) => name !== deleted);
+          }
+          if (metadata.featuredArtifact === deleted) metadata.featuredArtifact = remaining[0];
+        }, `Remove ${deleted} from artifact metadata`);
         deleteDialog.close();
         if (mediaStatus) mediaStatus.textContent = 'Deleted. The carousel will update after the site rebuilds in about a minute.';
       } catch (error) {

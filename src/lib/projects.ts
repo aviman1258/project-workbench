@@ -97,6 +97,15 @@ export async function loadArtifacts(
     });
 }
 
+// Exactly one artifact is featured whenever any exist: the front-matter pick when
+// it still exists, otherwise the first artifact in display order.
+export function featuredArtifact(
+  project: CollectionEntry<'projects'>,
+  artifacts: ProjectArtifact[],
+): ProjectArtifact | null {
+  return artifacts.find((artifact) => artifact.filename === project.data.featuredArtifact) ?? artifacts[0] ?? null;
+}
+
 export function formatDate(date: Date): string {
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
