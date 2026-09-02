@@ -9,6 +9,7 @@ privacy: public
 startDate: 2024-10-03
 updatedDate: 2026-09-02
 featuredArtifact: mypaljson2-20260902055735.png
+repositoryUrl: https://github.com/aviman1258/my-pal-json
 ---
 
 ## Observation
