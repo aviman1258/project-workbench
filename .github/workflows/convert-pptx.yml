@@ -41,7 +41,12 @@ jobs:
           git add -A
           if ! git diff --cached --quiet; then
             git commit -m "Convert PowerPoint artifacts to PDF"
-            git push
+            # hosted uploads commit more than once in quick succession — rebase
+            # over anything that landed while LibreOffice was installing
+            for attempt in 1 2 3; do
+              git pull --rebase origin main && git push && break
+              sleep 5
+            done
             # a GITHUB_TOKEN push does not trigger the deploy workflow — dispatch it
             gh workflow run deploy.yml
           fi
