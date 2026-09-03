@@ -31,7 +31,7 @@ const { id } = Astro.props;
           <button type="button" class="media-add-button" data-vault-media-add>＋ Add media</button>
         </div>
       </div>
-      <input type="file" multiple accept=".png,.jpg,.jpeg,.pdf,.mp4" hidden data-vault-media-input />
+      <input type="file" multiple hidden data-vault-media-input />
       <p class="form-status media-status" data-vault-media-status aria-live="assertive"></p>
       <div data-vault-carousel></div>
     </section>
@@ -64,11 +64,12 @@ const { id } = Astro.props;
     const mediaStatus = root.querySelector<HTMLElement>('[data-vault-media-status]')!;
     let loaded = false;
 
-    const mime = (name: string) =>
-      /\.pdf$/i.test(name) ? 'application/pdf'
-      : /\.mp4$/i.test(name) ? 'video/mp4'
-      : /\.png$/i.test(name) ? 'image/png'
-      : 'image/jpeg';
+    const MIME: Record<string, string> = {
+      png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+      webp: 'image/webp', svg: 'image/svg+xml', pdf: 'application/pdf',
+      mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
+    };
+    const mime = (name: string) => MIME[(name.split('.').pop() ?? '').toLowerCase()] ?? 'application/octet-stream';
 
     // Set at unlock; the media and field handlers below need them afterwards.
     let vaultToken = '';

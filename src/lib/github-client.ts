@@ -134,7 +134,7 @@ export async function listVaultArtifacts(token: string, folder: string): Promise
   try {
     const entries = await gh(token, `/repos/${GITHUB_OWNER}/${VAULT_REPO}/contents/projects/${folder}/artifacts`);
     return (entries as unknown as { type: string; name: string; path: string; size: number }[])
-      .filter((entry) => entry.type === 'file' && /\.(png|jpe?g|pdf|mp4)$/i.test(entry.name));
+      .filter((entry) => entry.type === 'file' && !entry.name.startsWith('.'));
   } catch {
     return [];
   }

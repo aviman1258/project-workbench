@@ -32,9 +32,17 @@ const artifactTypes: Record<string, Pick<ProjectArtifact, 'kind' | 'mimeType'>> 
   '.png': { kind: 'image', mimeType: 'image/png' },
   '.jpg': { kind: 'image', mimeType: 'image/jpeg' },
   '.jpeg': { kind: 'image', mimeType: 'image/jpeg' },
+  '.gif': { kind: 'image', mimeType: 'image/gif' },
+  '.webp': { kind: 'image', mimeType: 'image/webp' },
+  '.svg': { kind: 'image', mimeType: 'image/svg+xml' },
   '.pdf': { kind: 'pdf', mimeType: 'application/pdf' },
   '.mp4': { kind: 'video', mimeType: 'video/mp4' },
+  '.webm': { kind: 'video', mimeType: 'video/webm' },
+  '.mov': { kind: 'video', mimeType: 'video/quicktime' },
 };
+
+// anything else is still a valid artifact — shown as a generic file tile
+const fallbackType: Pick<ProjectArtifact, 'kind' | 'mimeType'> = { kind: 'file', mimeType: 'application/octet-stream' };
 
 export async function getProjectFolder(project: CollectionEntry<'projects'>): Promise<string> {
   const entries = await readdir(projectsRoot, { withFileTypes: true });
@@ -68,25 +76,22 @@ export async function loadArtifacts(
   }
 
   return entries
-    .filter((entry) => entry.isFile())
+    .filter((entry) => entry.isFile() && !entry.name.startsWith('.'))
     .map((entry) => {
       const sourcePath = path.join(artifactRoot, entry.name);
       const relativePath = path.relative(artifactRoot, sourcePath).replaceAll('\\', '/');
-      const type = artifactTypes[path.extname(entry.name).toLowerCase()];
-      return type
-        ? {
-            filename: entry.name,
-            relativePath,
-            sourcePath,
-            href: withBase(`/project-artifacts/${project.data.slug}/${relativePath
-              .split('/')
-              .map(encodeURIComponent)
-              .join('/')}`),
-            ...type,
-          }
-        : null;
+      const type = artifactTypes[path.extname(entry.name).toLowerCase()] ?? fallbackType;
+      return {
+        filename: entry.name,
+        relativePath,
+        sourcePath,
+        href: withBase(`/project-artifacts/${project.data.slug}/${relativePath
+          .split('/')
+          .map(encodeURIComponent)
+          .join('/')}`),
+        ...type,
+      };
     })
-    .filter((artifact): artifact is ProjectArtifact => artifact !== null)
     .sort((a, b) => {
       // curated order from front matter wins; unlisted files fall back to images-first, A-Z
       const rankA = orderRank.has(a.filename) ? orderRank.get(a.filename)! : Number.POSITIVE_INFINITY;

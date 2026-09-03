@@ -156,7 +156,7 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
           <button type="button" class="media-add-button" {...(publicOnlyBuild ? { 'data-remote-media-open': true } : { 'data-media-browse': true })}>＋ Add media</button>
         </div>
       </div>
-      {!publicOnlyBuild && <input type="file" multiple accept=".png,.jpg,.jpeg,.pdf,.mp4" hidden data-media-input />}
+      {!publicOnlyBuild && <input type="file" multiple hidden data-media-input />}
       <p class="form-status media-status" data-media-status aria-live="assertive"></p>
       {artifacts.length > 0 ? (
         <div class="artifact-carousel" data-artifact-carousel {...(publicOnlyBuild ? {} : { 'data-media-dropzone': true })} tabindex={artifacts.length > 1 ? '0' : undefined} aria-label="Project artifacts carousel">
@@ -170,7 +170,7 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
                     ) : artifact.kind === 'video' ? (
                       <video src={artifact.href} muted playsinline preload="metadata"></video>
                     ) : (
-                      <div class="artifact-slide__document" data-pdf-preview={artifact.kind === 'pdf' ? artifact.href : undefined}><span aria-hidden="true">▤</span><strong>{artifact.kind.toUpperCase()}</strong><small>Open to preview</small></div>
+                      <div class="artifact-slide__document" data-pdf-preview={artifact.kind === 'pdf' ? artifact.href : undefined}><span aria-hidden="true">▤</span><strong>{artifact.kind === 'file' ? (artifact.filename.split('.').pop() ?? 'file').toUpperCase() : artifact.kind.toUpperCase()}</strong><small>Open to {artifact.kind === 'pdf' ? 'preview' : 'view'}</small></div>
                     )}
                   </a>
                   <button type="button" class="artifact-slide__feature" data-media-feature-trigger data-filename={artifact.filename} data-featured={artifact.filename === heroArtifact?.filename ? 'true' : 'false'} aria-label={artifact.filename === heroArtifact?.filename ? `${artifact.filename} is the featured artifact` : `Feature ${artifact.filename}`} title="Featured artifact shows on the project card">
@@ -207,7 +207,7 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
           <div class="artifact-carousel__thumbnails" data-media-tiles aria-label="Choose an artifact, or drag a tile to reorder">
             {artifacts.map((artifact, index) => (
               <button type="button" data-carousel-thumbnail {...(publicOnlyBuild ? {} : { 'data-media-tile': true })} data-filename={artifact.filename} data-active={index === 0 ? 'true' : 'false'} aria-label={`Show ${artifact.filename}`} aria-current={index === 0 ? 'true' : undefined}>
-                {artifact.kind === 'image' ? <img src={artifact.href} alt="" loading="lazy" draggable="false" /> : <span data-pdf-preview={artifact.kind === 'pdf' ? artifact.href : undefined}>{artifact.kind.toUpperCase()}</span>}
+                {artifact.kind === 'image' ? <img src={artifact.href} alt="" loading="lazy" draggable="false" /> : <span data-pdf-preview={artifact.kind === 'pdf' ? artifact.href : undefined}>{artifact.kind === 'file' ? (artifact.filename.split('.').pop() ?? 'file').toUpperCase() : artifact.kind.toUpperCase()}</span>}
               </button>
             ))}
           </div>

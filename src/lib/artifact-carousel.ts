@@ -3,7 +3,7 @@
 // private vault injects the same markup client-side after unlock, so it also
 // needs the HTML builder. Keeping all three here keeps the two views identical.
 
-export type ArtifactKind = 'image' | 'video' | 'pdf';
+export type ArtifactKind = 'image' | 'video' | 'pdf' | 'file';
 
 export interface CarouselArtifact {
   filename: string;
@@ -13,7 +13,16 @@ export interface CarouselArtifact {
 }
 
 export const artifactKind = (name: string): ArtifactKind =>
-  /\.mp4$/i.test(name) ? 'video' : /\.pdf$/i.test(name) ? 'pdf' : 'image';
+  /\.(png|jpe?g|gif|webp|svg)$/i.test(name) ? 'image'
+  : /\.(mp4|webm|mov)$/i.test(name) ? 'video'
+  : /\.pdf$/i.test(name) ? 'pdf'
+  : 'file';
+
+/** the label shown on non-image tiles: PDF, VIDEO, or the actual extension */
+export const kindLabel = (artifact: { filename: string; kind: ArtifactKind }) =>
+  artifact.kind === 'file'
+    ? (artifact.filename.split('.').pop() ?? 'file').toUpperCase()
+    : artifact.kind.toUpperCase();
 
 const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -29,7 +38,7 @@ const slideHtml = (artifact: CarouselArtifact, index: number) => {
     ? `<img src="${href}" alt="Preview of ${name}" loading="${index === 0 ? 'eager' : 'lazy'}" />`
     : artifact.kind === 'video'
       ? `<video src="${href}" muted playsinline preload="metadata"></video>`
-      : `<div class="artifact-slide__document" data-pdf-preview="${href}"><span aria-hidden="true">▤</span><strong>PDF</strong><small>Open to preview</small></div>`;
+      : `<div class="artifact-slide__document"${artifact.kind === 'pdf' ? ` data-pdf-preview="${href}"` : ''}><span aria-hidden="true">▤</span><strong>${kindLabel(artifact)}</strong><small>Open to ${artifact.kind === 'pdf' ? 'preview' : 'view'}</small></div>`;
   return `<figure class="artifact-slide" data-carousel-slide aria-hidden="${index === 0 ? 'false' : 'true'}">
     <a class="artifact-slide__media" href="${href}" target="_blank" rel="noreferrer" aria-label="Open ${name}">${media}</a>
     <button type="button" class="artifact-slide__feature" data-media-feature-trigger data-filename="${name}" data-featured="${artifact.featured}" aria-label="${artifact.featured ? `${name} is the featured artifact` : `Feature ${name}`}" title="Featured artifact shows on the project card">${STAR}</button>
@@ -46,7 +55,7 @@ const thumbnailHtml = (artifact: CarouselArtifact, index: number) => {
   const href = escapeHtml(artifact.href);
   const inner = artifact.kind === 'image'
     ? `<img src="${href}" alt="" loading="lazy" draggable="false" />`
-    : `<span${artifact.kind === 'pdf' ? ` data-pdf-preview="${href}"` : ''}>${artifact.kind.toUpperCase()}</span>`;
+    : `<span${artifact.kind === 'pdf' ? ` data-pdf-preview="${href}"` : ''}>${kindLabel(artifact)}</span>`;
   return `<button type="button" data-carousel-thumbnail data-filename="${name}" data-active="${index === 0 ? 'true' : 'false'}" aria-label="Show ${name}"${index === 0 ? ' aria-current="true"' : ''}>${inner}</button>`;
 };
 

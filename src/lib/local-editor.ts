@@ -24,12 +24,17 @@ import {
 const defaultProjectsRoot = path.resolve('src/content/projects');
 const maxJsonBytes = 40 * 1024 * 1024;
 const maxArtifactBytes = 25 * 1024 * 1024;
-const allowedArtifactTypes: Record<string, string> = {
+const artifactMimeTypes: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
   '.pdf': 'application/pdf',
   '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
 };
 
 class EditorError extends Error {
@@ -257,8 +262,8 @@ function safeFilename(filename: string): string {
   const original = path.basename(filename.trim());
   const extension = path.extname(original).toLowerCase();
   const stem = path.basename(original, path.extname(original)).replace(/[^a-zA-Z0-9._-]+/g, '-');
-  if (!stem || !allowedArtifactTypes[extension]) {
-    throw new EditorError('Artifacts must be PNG, JPG, JPEG, PDF, or MP4 files.', 400, 'artifact');
+  if (!stem || !extension) {
+    throw new EditorError('Artifacts need a filename with an extension.', 400, 'artifact');
   }
   return `${stem}${extension}`;
 }
@@ -419,8 +424,7 @@ export function localEditorPlugin(projectsRoot = defaultProjectsRoot): Plugin {
               throw new EditorError('Invalid artifact path.', 400);
             }
             const extension = path.extname(filename).toLowerCase();
-            const mimeType = allowedArtifactTypes[extension];
-            if (!mimeType) throw new EditorError('Artifact type is not supported.', 400);
+            const mimeType = artifactMimeTypes[extension] ?? 'application/octet-stream';
             const projectRoot = await findProjectFolder(projectsRoot, slug);
             if (await isPrivateProject(projectsRoot, slug)) requireDeviceUnlock(request);
             const contents = await readFile(path.join(projectRoot, 'artifacts', filename));

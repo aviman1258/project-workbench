@@ -15,7 +15,7 @@ const { folder } = Astro.props;
 ---
 
 <div data-remote-editor data-project-folder={folder} data-statuses={projectStatuses.join(',')} hidden>
-  <input type="file" multiple accept=".png,.jpg,.jpeg,.pdf,.mp4" data-remote-media-input />
+  <input type="file" multiple data-remote-media-input />
 </div>
 
 <script>
@@ -169,7 +169,7 @@ const { folder } = Astro.props;
       if (requireToken()) mediaInput.click();
     });
     mediaInput.addEventListener('change', async () => {
-      const files = [...(mediaInput.files ?? [])].filter((file) => /\.(png|jpe?g|pdf|mp4)$/i.test(file.name) && file.size <= 20 * 1024 * 1024);
+      const files = [...(mediaInput.files ?? [])].filter((file) => file.name.includes('.') && file.size <= 20 * 1024 * 1024);
       mediaInput.value = '';
       if (!files.length) { setStatus('PNG, JPG, PDF, or MP4 up to 20 MB.'); return; }
       try {
