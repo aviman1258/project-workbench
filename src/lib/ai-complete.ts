@@ -138,7 +138,7 @@ async function draftWithAnthropic(apiKey: string, userPrompt: string): Promise<s
       .trim();
   } catch (error) {
     if (error instanceof Anthropic.AuthenticationError) {
-      throw new Error('That Anthropic API key was rejected — replace it via the GitHub icon dialog.');
+      throw new Error('That Anthropic API key was rejected — replace it via the connections icon in the header.');
     }
     if (error instanceof Anthropic.RateLimitError) {
       throw new Error('Anthropic rate limit hit — wait a moment and try again.');
@@ -150,7 +150,7 @@ async function draftWithAnthropic(apiKey: string, userPrompt: string): Promise<s
 async function draftWithOpenAI(apiKey: string, userPrompt: string): Promise<string> {
   const proxy = getStoredOpenAiProxy().replace(/\/$/, '');
   if (!proxy) {
-    throw new Error("OpenAI blocks direct browser calls. Deploy the repo's proxy/openai-worker.js on Cloudflare Workers (free) and paste its URL in the GitHub dialog — or use an Anthropic key, which works directly.");
+    throw new Error("OpenAI blocks direct browser calls. Deploy the repo's proxy/openai-worker.js on Cloudflare Workers (free) and paste its URL in the connections dialog — or use an Anthropic key, which works directly.");
   }
   const { default: OpenAI } = await import('openai');
   const client = new OpenAI({ apiKey, baseURL: `${proxy}/v1`, dangerouslyAllowBrowser: true });
@@ -166,7 +166,7 @@ async function draftWithOpenAI(apiKey: string, userPrompt: string): Promise<stri
     return (response.choices?.[0]?.message?.content ?? '').trim();
   } catch (error) {
     if (error instanceof OpenAI.AuthenticationError) {
-      throw new Error('That OpenAI API key was rejected — replace it via the GitHub icon dialog.');
+      throw new Error('That OpenAI API key was rejected — replace it via the connections icon in the header.');
     }
     if (error instanceof OpenAI.RateLimitError) {
       throw new Error('OpenAI rate limit hit — wait a moment and try again.');
@@ -182,7 +182,7 @@ export async function aiComplete(options: {
   context: string;
 }): Promise<string> {
   const apiKey = getStoredAnthropicKey();
-  if (!apiKey) throw new Error('Add an Anthropic or OpenAI API key first — GitHub icon in the header → AI drafts.');
+  if (!apiKey) throw new Error('Add an Anthropic or OpenAI API key first — connections icon in the header.');
   const { field, existing, projectName, context } = options;
 
   const instruction = field === 'description'

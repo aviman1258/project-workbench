@@ -1900,13 +1900,20 @@ a {
   height: 19px;
 }
 
-.github-status[data-connected='true'] {
+/* connections icon: green = GitHub + AI key, ochre = one of the two, red = none */
+.github-status[data-connected='all'] {
   border: 1px solid var(--forest);
   background: var(--forest);
   color: #fff;
 }
 
-.github-status[data-connected='false'] {
+.github-status[data-connected='partial'] {
+  border: 1.5px solid var(--ochre);
+  background: transparent;
+  color: var(--ochre);
+}
+
+.github-status[data-connected='none'] {
   border: 1.5px solid var(--red);
   background: transparent;
   color: var(--red);
@@ -1933,6 +1940,62 @@ a {
 
 .token-dialog__forget {
   color: var(--red);
+}
+
+.token-dialog__lights {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.token-dialog__light {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.token-dialog__dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 0 3px var(--red-light);
+}
+
+.token-dialog__dot[data-on='true'] {
+  background: var(--forest);
+  box-shadow: 0 0 0 3px var(--moss);
+}
+
+.token-dialog__light-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.token-dialog__light-text strong {
+  font-size: 13px;
+}
+
+.token-dialog__light-text p {
+  margin: 2px 0 0;
+}
+
+.token-dialog__light .token-dialog__forget {
+  flex: none;
+  padding: 4px 10px;
+}
+
+.token-dialog__scanner {
+  width: 100%;
+  margin-top: 10px;
+  border-radius: var(--radius-sm);
+  background: #000;
 }
 
 /* the wrapper shrinks to the text so the pencil hangs off the text's own

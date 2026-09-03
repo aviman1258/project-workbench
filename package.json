@@ -17,6 +17,7 @@
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.3",
     "astro": "7.2.9",
+    "jsqr": "^1.4.0",
     "openai": "^7.9.0",
     "pdfjs-dist": "^6.3.289",
     "qrcode": "^1.5.4",

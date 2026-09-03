@@ -15,7 +15,7 @@ const today = new Date().toISOString().slice(0, 10);
 
   <div class="project-editor__tools" data-remote-create data-projects-base={withBase('/projects')}>
     <p class="remote-editor-hint" data-remote-create-connect-hint>
-      Connect GitHub with the icon in the header to add a project.
+      Connect GitHub with the connections icon in the header to add a project.
     </p>
 
     <details data-remote-create-panel hidden open>
@@ -121,7 +121,7 @@ const today = new Date().toISOString().slice(0, 10);
       } catch (error) {
         if ((error as { status?: number }).status === 401) {
           clearToken();
-          status.textContent = 'GitHub rejected the token — reconnect with the icon in the header.';
+          status.textContent = 'GitHub rejected the token — reconnect with the connections icon in the header.';
           return;
         }
         status.textContent = (error as Error).message || 'The project could not be created.';

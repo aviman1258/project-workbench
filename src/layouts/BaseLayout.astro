@@ -70,8 +70,8 @@ const CARD = {
           </button>
           <a class:list={['site-action', publicOnlyBuild && 'site-action--needs-github']} href={withBase('/manage')}>+ Add project</a>
           {publicOnlyBuild && (
-            <button type="button" class="github-status" data-token-open data-connected="false" aria-label="GitHub connection">
-              <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path></svg>
+            <button type="button" class="github-status" data-token-open data-connected="none" aria-label="Connections">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
             </button>
           )}
           {!publicOnlyBuild && (
@@ -92,32 +92,52 @@ const CARD = {
 
     {publicOnlyBuild && (
       <dialog class="share-dialog token-dialog" data-token-dialog>
-        <h3>GitHub connection</h3>
-        <p class="remote-editor-hint" data-token-dialog-state>Not connected.</p>
+        <h3>Connections</h3>
+        <div class="token-dialog__lights">
+          <div class="token-dialog__light">
+            <span class="token-dialog__dot" data-github-dot data-on="false"></span>
+            <div class="token-dialog__light-text">
+              <strong>GitHub — editing</strong>
+              <p class="remote-editor-hint" data-github-hint-on hidden>Connected — edits commit as aviman1258.</p>
+              <p class="remote-editor-hint" data-github-hint-off>
+                Not connected.
+                <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noreferrer">Create a fine-grained PAT ↗</a>
+                with <strong>Contents: read and write</strong> on <code>aviman1258/project-workbench</code>
+                (add <code>workbench-private</code> for private projects).
+              </p>
+            </div>
+            <button type="button" class="share-dialog__close token-dialog__forget" data-forget-github hidden>Forget</button>
+          </div>
+          <div class="token-dialog__light">
+            <span class="token-dialog__dot" data-ai-dot data-on="false"></span>
+            <div class="token-dialog__light-text">
+              <strong>AI drafts</strong>
+              <p class="remote-editor-hint" data-ai-hint-on hidden>Connected.</p>
+              <p class="remote-editor-hint" data-ai-hint-off>
+                Not connected.
+                <a href="https://platform.claude.com/settings/workspaces/default/keys" target="_blank" rel="noreferrer">Create an Anthropic API key ↗</a>
+                (<code>sk-ant-…</code>). OpenAI keys (<code>sk-…</code>) work too.
+              </p>
+            </div>
+            <button type="button" class="share-dialog__close token-dialog__forget" data-forget-ai hidden>Forget</button>
+          </div>
+        </div>
         <p class="remote-editor-hint">
-          Paste a fine-grained personal access token with <strong>Contents: read and write</strong> on
-          <code>aviman1258/project-workbench</code> (add <code>workbench-private</code> for private projects).
-          It is stored only in this browser.
-          <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">Create one on GitHub ↗</a>
+          Paste either key below — the type is detected automatically. Keys are stored only in this browser.
         </p>
-        <input type="password" class="token-dialog__input" data-token-dialog-input autocomplete="off" placeholder="github_pat_…" />
-        <p class="remote-editor-hint token-dialog__ai-hint">
-          <strong>AI drafts (optional):</strong> paste an
-          <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">Anthropic ↗</a>
-          (<code>sk-ant-…</code>) or
-          <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">OpenAI ↗</a>
-          (<code>sk-…</code>) API key — the provider is detected automatically.
-        </p>
-        <input type="password" class="token-dialog__input" data-anthropic-key-input autocomplete="off" placeholder="sk-ant-… or sk-…" />
-        <p class="remote-editor-hint token-dialog__ai-hint">
-          OpenAI keys additionally need the repo's <code>proxy/openai-worker.js</code> deployed on Cloudflare Workers
-          (OpenAI blocks direct browser calls) — paste the worker URL here. Anthropic keys need no proxy.
-        </p>
-        <input type="url" class="token-dialog__input" data-openai-proxy-input autocomplete="off" placeholder="https://your-worker.workers.dev (OpenAI keys only)" />
+        <input type="password" class="token-dialog__input" data-token-dialog-input autocomplete="off" placeholder="github_pat_… or sk-ant-…" />
+        <div data-proxy-row hidden>
+          <p class="remote-editor-hint token-dialog__ai-hint">
+            OpenAI keys need the repo's <code>proxy/openai-worker.js</code> deployed on Cloudflare Workers
+            (OpenAI blocks direct browser calls) — paste the worker URL:
+          </p>
+          <input type="url" class="token-dialog__input" data-openai-proxy-input autocomplete="off" placeholder="https://your-worker.workers.dev" />
+        </div>
+        <video class="token-dialog__scanner" data-token-scan-video hidden playsinline muted></video>
         <p class="share-dialog__url" data-token-dialog-status></p>
         <div class="share-dialog__actions">
-          <button type="button" class="share-dialog__native" data-token-dialog-save>Connect</button>
-          <button type="button" class="share-dialog__close token-dialog__forget" data-token-dialog-forget hidden>Forget token</button>
+          <button type="button" class="share-dialog__native" data-token-dialog-save>Save</button>
+          <button type="button" class="share-dialog__close" data-token-scan>Scan QR</button>
           <button type="button" class="share-dialog__close" data-token-dialog-close>Close</button>
         </div>
       </dialog>
@@ -173,65 +193,148 @@ const CARD = {
     <script>
       import QRCode from 'qrcode';
       import { TOKEN_EVENT, clearToken, getStoredToken, storeToken, validateToken } from '../lib/github-client';
-      import { clearAnthropicKey, clearOpenAiProxy, getStoredAnthropicKey, getStoredOpenAiProxy, storeAnthropicKey, storeOpenAiProxy } from '../lib/ai-complete';
+      import { clearAnthropicKey, clearOpenAiProxy, detectProvider, getStoredAnthropicKey, getStoredOpenAiProxy, storeAnthropicKey, storeOpenAiProxy } from '../lib/ai-complete';
 
-      // --- header GitHub connection icon + token dialog (hosted builds only) ---
+      // --- header connections icon + dialog (hosted builds only) ---
+      // One input for every credential; the paste's prefix says what it is.
       const tokenIcon = document.querySelector<HTMLButtonElement>('[data-token-open]');
       const tokenDialog = document.querySelector<HTMLDialogElement>('[data-token-dialog]');
       if (tokenIcon && tokenDialog) {
-        // ask the browser not to evict this site's storage (where the token lives)
+        // ask the browser not to evict this site's storage (where the keys live)
         try { void navigator.storage?.persist?.(); } catch { /* older browsers */ }
-        const stateLabel = tokenDialog.querySelector<HTMLElement>('[data-token-dialog-state]')!;
-        const input = tokenDialog.querySelector<HTMLInputElement>('[data-token-dialog-input]')!;
-        const status = tokenDialog.querySelector<HTMLElement>('[data-token-dialog-status]')!;
-        const forgetButton = tokenDialog.querySelector<HTMLButtonElement>('[data-token-dialog-forget]')!;
+        const q = <T extends HTMLElement>(sel: string) => tokenDialog.querySelector<T>(sel)!;
+        const input = q<HTMLInputElement>('[data-token-dialog-input]');
+        const status = q('[data-token-dialog-status]');
+        const proxyRow = q('[data-proxy-row]');
+        const proxyInput = q<HTMLInputElement>('[data-openai-proxy-input]');
+        const video = q<HTMLVideoElement>('[data-token-scan-video]');
+        const scanButton = q<HTMLButtonElement>('[data-token-scan]');
 
         const refresh = () => {
-          const connected = Boolean(getStoredToken());
-          tokenIcon.dataset.connected = String(connected);
-          tokenIcon.title = connected ? 'GitHub connected' : 'Not connected to GitHub — click to add a token';
-          stateLabel.textContent = connected ? 'Connected — edits commit as aviman1258.' : 'Not connected. Editing needs a token.';
-          forgetButton.hidden = !connected;
-          // editing affordances (pencils) only show while connected
-          document.body.dataset.githubConnected = String(connected);
+          const github = Boolean(getStoredToken());
+          const aiKey = getStoredAnthropicKey();
+          const openai = Boolean(aiKey) && detectProvider(aiKey) === 'openai';
+          tokenIcon.dataset.connected = github && aiKey ? 'all' : github || aiKey ? 'partial' : 'none';
+          tokenIcon.title = github && aiKey ? 'GitHub and AI connected'
+            : github ? 'GitHub connected — no AI key'
+            : aiKey ? 'AI key saved — GitHub not connected'
+            : 'Not connected — click to add keys';
+          // editing affordances (pencils, Add project) only show while GitHub is connected
+          document.body.dataset.githubConnected = String(github);
+          q('[data-github-dot]').dataset.on = String(github);
+          q('[data-ai-dot]').dataset.on = String(Boolean(aiKey));
+          q('[data-github-hint-on]').hidden = !github;
+          q('[data-github-hint-off]').hidden = github;
+          q('[data-ai-hint-on]').hidden = !aiKey;
+          q('[data-ai-hint-off]').hidden = Boolean(aiKey);
+          q('[data-ai-hint-on]').textContent = openai
+            ? (getStoredOpenAiProxy() ? 'Connected — OpenAI key and proxy saved.' : 'OpenAI key saved — it still needs the proxy URL below.')
+            : 'Connected — Anthropic key saved.';
+          q('[data-forget-github]').hidden = !github;
+          q('[data-forget-ai]').hidden = !aiKey;
+          proxyRow.hidden = !openai;
         };
         refresh();
         window.addEventListener(TOKEN_EVENT, refresh);
 
-        tokenIcon.addEventListener('click', () => { status.textContent = ''; tokenDialog.showModal(); });
-        tokenDialog.querySelector('[data-token-dialog-close]')?.addEventListener('click', () => tokenDialog.close());
-        tokenDialog.addEventListener('click', (event) => { if (event.target === tokenDialog) tokenDialog.close(); });
-        forgetButton.addEventListener('click', () => { clearToken(); clearAnthropicKey(); clearOpenAiProxy(); status.textContent = 'Token, AI key, and proxy forgotten.'; });
-        const anthropicInput = tokenDialog.querySelector<HTMLInputElement>('[data-anthropic-key-input]')!;
-        anthropicInput.placeholder = getStoredAnthropicKey() ? 'AI key saved — paste to replace' : 'sk-ant-… or sk-…';
-        const proxyInput = tokenDialog.querySelector<HTMLInputElement>('[data-openai-proxy-input]')!;
-        if (getStoredOpenAiProxy()) proxyInput.placeholder = 'Proxy saved — paste to replace';
-        tokenDialog.querySelector('[data-token-dialog-save]')?.addEventListener('click', async () => {
-          const candidate = input.value.trim();
-          const anthropicCandidate = anthropicInput.value.trim();
-          if (anthropicCandidate) {
-            storeAnthropicKey(anthropicCandidate);
-            anthropicInput.value = '';
-            anthropicInput.placeholder = 'AI key saved — paste to replace';
-          }
-          const proxyCandidate = proxyInput.value.trim();
-          if (proxyCandidate) {
-            storeOpenAiProxy(proxyCandidate);
-            proxyInput.value = '';
-            proxyInput.placeholder = 'Proxy saved — paste to replace';
-          }
-          if (!candidate) {
-            status.textContent = anthropicCandidate ? 'AI key saved.' : 'Paste a token first.';
+        // Route a pasted (or scanned) value by its prefix.
+        const saveValue = async (raw: string) => {
+          const value = raw.trim();
+          if (!value) { status.textContent = 'Paste a key first.'; return; }
+          if (/^(github_pat_|ghp_|gho_)/.test(value)) {
+            status.textContent = 'Checking GitHub access…';
+            try {
+              await validateToken(value);
+              storeToken(value);
+              status.textContent = 'GitHub connected.';
+            } catch (error) {
+              status.textContent = (error as Error).message || 'That token did not work.';
+              return;
+            }
+          } else if (value.startsWith('sk-')) {
+            storeAnthropicKey(value);
+            status.textContent = detectProvider(value) === 'anthropic'
+              ? 'Anthropic key saved.'
+              : 'OpenAI key saved — it needs the proxy URL below.';
+          } else if (/^https:\/\//.test(value)) {
+            storeOpenAiProxy(value);
+            status.textContent = 'Proxy URL saved.';
+          } else {
+            status.textContent = "That doesn't look like a GitHub PAT (github_pat_…) or an AI key (sk-…).";
             return;
           }
-          status.textContent = 'Checking access…';
+          input.value = '';
+          refresh();
+        };
+
+        tokenIcon.addEventListener('click', () => { status.textContent = ''; refresh(); tokenDialog.showModal(); });
+        q('[data-token-dialog-close]').addEventListener('click', () => tokenDialog.close());
+        tokenDialog.addEventListener('click', (event) => { if (event.target === tokenDialog) tokenDialog.close(); });
+        q('[data-forget-github]').addEventListener('click', () => { clearToken(); status.textContent = 'GitHub token forgotten.'; refresh(); });
+        q('[data-forget-ai]').addEventListener('click', () => { clearAnthropicKey(); clearOpenAiProxy(); status.textContent = 'AI key (and proxy) forgotten.'; refresh(); });
+        q('[data-token-dialog-save]').addEventListener('click', async () => {
+          const proxyCandidate = proxyInput.value.trim();
+          if (proxyCandidate) { storeOpenAiProxy(proxyCandidate); proxyInput.value = ''; refresh(); }
+          if (input.value.trim()) await saveValue(input.value);
+          else if (proxyCandidate) status.textContent = 'Proxy URL saved.';
+          else status.textContent = 'Paste a key first.';
+        });
+
+        // --- QR scan: read a key straight off another screen ---
+        let scanStream: MediaStream | null = null;
+        let scanRaf = 0;
+        const stopScan = () => {
+          cancelAnimationFrame(scanRaf);
+          scanStream?.getTracks().forEach((track) => track.stop());
+          scanStream = null;
+          video.hidden = true;
+          video.srcObject = null;
+          scanButton.textContent = 'Scan QR';
+        };
+        tokenDialog.addEventListener('close', stopScan);
+        scanButton.addEventListener('click', async () => {
+          if (scanStream) { stopScan(); status.textContent = ''; return; }
           try {
-            await validateToken(candidate);
-            storeToken(candidate);
-            input.value = '';
-            status.textContent = anthropicCandidate ? 'Connected, AI key saved.' : 'Connected.';
-          } catch (error) {
-            status.textContent = (error as Error).message || 'That token did not work.';
+            scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          } catch {
+            status.textContent = 'Camera unavailable — allow camera access, or paste the key instead.';
+            return;
+          }
+          video.srcObject = scanStream;
+          video.hidden = false;
+          await video.play().catch(() => {});
+          scanButton.textContent = 'Stop scan';
+          status.textContent = 'Point the camera at the QR code…';
+          const onDecoded = (text: string) => { stopScan(); void saveValue(text); };
+          const Detector = (window as any).BarcodeDetector;
+          if (Detector) {
+            const detector = new Detector({ formats: ['qr_code'] });
+            const tick = async () => {
+              if (!scanStream) return;
+              try {
+                const codes = await detector.detect(video);
+                if (codes.length && codes[0].rawValue) return onDecoded(codes[0].rawValue);
+              } catch { /* frame not ready yet */ }
+              scanRaf = requestAnimationFrame(() => void tick());
+            };
+            void tick();
+          } else {
+            const { default: jsQR } = await import('jsqr');
+            const frame = document.createElement('canvas');
+            const ctx = frame.getContext('2d', { willReadFrequently: true })!;
+            const tick = () => {
+              if (!scanStream) return;
+              if (video.videoWidth) {
+                frame.width = video.videoWidth;
+                frame.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0);
+                const image = ctx.getImageData(0, 0, frame.width, frame.height);
+                const code = jsQR(image.data, image.width, image.height);
+                if (code?.data) return onDecoded(code.data);
+              }
+              scanRaf = requestAnimationFrame(tick);
+            };
+            tick();
           }
         });
       }
