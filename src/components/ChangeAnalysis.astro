@@ -1,0 +1,152 @@
+---
+// Stage 1 of the demo pipeline on the project page: "What changed?".
+// Hosted builds only; needs GitHub connected (evidence) + an AI key (analysis).
+// Results are drafts rendered in place — nothing persists until later phases
+// add review/approval.
+---
+
+<section class="artifacts-section change-analysis" data-change-analysis>
+  <div class="section-heading section-heading--detail">
+    <div>
+      <h2>What changed</h2>
+      <p>AI code investigation of the linked repository or pull request. Every claim cites its evidence; unknowns stay unknown.</p>
+      <button type="button" class="media-add-button" data-analysis-run>✦ Analyze changes</button>
+    </div>
+  </div>
+  <p class="form-status media-status" data-analysis-status aria-live="polite"></p>
+  <div class="change-analysis__result" data-analysis-result hidden></div>
+</section>
+
+<script>
+  import { collectProjectEvidence, describeLastEvidence } from '../lib/ai-complete';
+  import { getStoredToken } from '../lib/github-client';
+  import { escalationReasons, investigateChanges, type ChangeUnderstanding, type Claim } from '../lib/ai/pipeline';
+  import type { RepositoryContext } from '../lib/ai/evidence';
+
+  const root = document.querySelector<HTMLElement>('[data-change-analysis]');
+  if (root) {
+    const runButton = root.querySelector<HTMLButtonElement>('[data-analysis-run]')!;
+    const status = root.querySelector<HTMLElement>('[data-analysis-status]')!;
+    const result = root.querySelector<HTMLElement>('[data-analysis-result]')!;
+
+    const fieldValue = (field: string) => {
+      const display = document.querySelector<HTMLElement>(`[data-field-display="${field}"]`);
+      return display?.dataset.value ?? '';
+    };
+
+    const basisLabel: Record<Claim['basis'], string> = {
+      observed: 'observed',
+      'inferred-strong': 'inferred',
+      'inferred-weak': 'weakly inferred',
+      unknown: 'unknown',
+    };
+
+    const renderClaims = (title: string, claims: Claim[], context: RepositoryContext) => {
+      if (!claims.length) return null;
+      const block = document.createElement('div');
+      block.className = 'change-analysis__block';
+      const heading = document.createElement('h3');
+      heading.textContent = title;
+      block.append(heading);
+      for (const claim of claims) {
+        const row = document.createElement('div');
+        row.className = 'change-analysis__claim';
+        const text = document.createElement('p');
+        text.textContent = claim.value;
+        row.append(text);
+        const meta = document.createElement('div');
+        meta.className = 'change-analysis__meta';
+        const basis = document.createElement('span');
+        basis.className = `change-analysis__basis change-analysis__basis--${claim.basis}`;
+        basis.textContent = `${basisLabel[claim.basis]} · ${Math.round(claim.confidence * 100)}%`;
+        meta.append(basis);
+        for (const id of claim.evidence.slice(0, 6)) {
+          const chip = document.createElement('span');
+          chip.className = 'change-analysis__chip';
+          chip.textContent = id;
+          const source = context.sources.find((s) => s.id === id);
+          if (source) chip.title = source.text.slice(0, 400);
+          meta.append(chip);
+        }
+        row.append(meta);
+        block.append(row);
+      }
+      return block;
+    };
+
+    const render = (analysis: ChangeUnderstanding, context: RepositoryContext) => {
+      result.replaceChildren();
+      const summary = document.createElement('p');
+      summary.className = 'change-analysis__summary';
+      summary.textContent = analysis.summary;
+      result.append(summary);
+
+      for (const block of [
+        renderClaims('User-facing changes', analysis.userFacingChanges, context),
+        renderClaims('Technical changes', analysis.technicalChanges, context),
+      ]) if (block) result.append(block);
+
+      if (analysis.affectedFlows.length) {
+        const flows = document.createElement('p');
+        flows.className = 'change-analysis__flows';
+        flows.textContent = `Affected flows: ${analysis.affectedFlows.join(' · ')}`;
+        result.append(flows);
+      }
+      if (analysis.unknowns.length) {
+        const unknowns = document.createElement('div');
+        unknowns.className = 'change-analysis__block change-analysis__block--unknowns';
+        const heading = document.createElement('h3');
+        heading.textContent = 'Unknowns';
+        unknowns.append(heading);
+        for (const item of analysis.unknowns) {
+          const p = document.createElement('p');
+          p.textContent = item;
+          unknowns.append(p);
+        }
+        result.append(unknowns);
+      }
+
+      const foot = document.createElement('p');
+      foot.className = 'change-analysis__foot';
+      foot.textContent = `Overall confidence ${Math.round(analysis.confidence * 100)}% · grounded in ${describeLastEvidence()}. This is an AI draft, not the record.`;
+      result.append(foot);
+
+      const reasons = escalationReasons(context.signals, analysis);
+      if (reasons.length) {
+        const escalate = document.createElement('div');
+        escalate.className = 'change-analysis__escalate';
+        const note = document.createElement('span');
+        note.className = 'field-editor__hint';
+        note.textContent = `Worth a stronger model? Signals: ${reasons.join('; ')}.`;
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.className = 'media-add-button';
+        retry.textContent = 'Re-analyze with the stronger model';
+        retry.addEventListener('click', () => void run('strong'));
+        escalate.append(note, retry);
+        result.append(escalate);
+      }
+      result.hidden = false;
+    };
+
+    const run = async (tier: 'fast' | 'strong') => {
+      const token = getStoredToken();
+      if (!token) { status.textContent = 'Connect GitHub with the connections icon in the header first.'; return; }
+      runButton.disabled = true;
+      status.textContent = 'Collecting evidence from GitHub…';
+      try {
+        const context = await collectProjectEvidence(token, fieldValue('repositoryUrl'), fieldValue('pullRequestUrl'));
+        status.textContent = `Analyzing ${describeLastEvidence()}${tier === 'strong' ? ' with the stronger model' : ''}…`;
+        const analysis = await investigateChanges(context, tier);
+        status.textContent = '';
+        render(analysis, context);
+      } catch (error) {
+        status.textContent = (error as Error).message || 'The analysis failed.';
+      } finally {
+        runButton.disabled = false;
+      }
+    };
+
+    runButton.addEventListener('click', () => void run('fast'));
+  }
+</script>

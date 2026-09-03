@@ -2024,6 +2024,105 @@ body:not([data-github-connected='true']) .site-action--needs-github {
   display: none;
 }
 
+/* the AI analysis section needs GitHub for evidence — hide until connected */
+body:not([data-github-connected='true']) .change-analysis {
+  display: none;
+}
+
+.change-analysis__result {
+  display: grid;
+  gap: 18px;
+}
+
+.change-analysis__summary {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.change-analysis__block h3 {
+  margin: 0 0 10px;
+  color: var(--ink-faint);
+  font: 700 10px/1 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.change-analysis__claim {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.change-analysis__claim p {
+  margin: 0 0 7px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.change-analysis__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.change-analysis__basis {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font: 700 9px/1.4 var(--mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: var(--moss);
+  color: var(--forest);
+}
+
+.change-analysis__basis--inferred-strong {
+  background: var(--blue-light);
+  color: var(--blue);
+}
+
+.change-analysis__basis--inferred-weak {
+  background: var(--ochre-light);
+  color: var(--ochre);
+}
+
+.change-analysis__basis--unknown {
+  background: var(--red-light);
+  color: var(--red);
+}
+
+.change-analysis__chip {
+  padding: 3px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font: 9px/1.4 var(--mono);
+  color: var(--ink-soft);
+  cursor: help;
+  overflow-wrap: anywhere;
+}
+
+.change-analysis__flows,
+.change-analysis__foot {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.change-analysis__block--unknowns p {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.change-analysis__escalate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
 .inline-editable > .inline-edit {
   position: absolute;
   top: -10px;

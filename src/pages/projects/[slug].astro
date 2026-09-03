@@ -5,6 +5,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import { featuredArtifact, formatDate, formatLabel, getProjectFolder, loadArtifacts, publicOnlyBuild, withBase } from '../../lib/projects';
 import RemoteEditor from '../../components/RemoteEditor.astro';
 import PrivateVault from '../../components/PrivateVault.astro';
+import ChangeAnalysis from '../../components/ChangeAnalysis.astro';
 import { privacyLevels, projectStatuses } from '../../lib/project-schema';
 
 export async function getStaticPaths() {
@@ -241,6 +242,8 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
       </dialog>
     </section>
     )}
+
+    {publicOnlyBuild && <ChangeAnalysis />}
   </div>
 </BaseLayout>
 

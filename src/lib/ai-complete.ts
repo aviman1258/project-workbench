@@ -66,21 +66,34 @@ export function describeLastEvidence(): string {
   return lastContext ? describeContext(lastContext) : '';
 }
 
+export function assertAllowedOwners(...urls: string[]) {
+  for (const url of urls) {
+    const owner = (parsePullRequest(url) ?? parseGitHubRepo(url))?.owner;
+    if (owner && !ALLOWED_OWNERS.includes(owner.toLowerCase())) {
+      throw new Error(`For safety, AI analysis only reads repositories owned by ${ALLOWED_OWNERS.join(', ')} — ${owner} is not on that list.`);
+    }
+  }
+}
+
+/** Typed evidence package for the pipeline stages (allowlist enforced). */
+export async function collectProjectEvidence(
+  token: string,
+  repositoryUrl: string,
+  pullRequestUrl: string,
+): Promise<RepositoryContext> {
+  assertAllowedOwners(repositoryUrl, pullRequestUrl);
+  const context = await collectEvidence(token, repositoryUrl, pullRequestUrl);
+  if (!context.sources.length) throw new Error('Add a repository (or pull request) link first — the AI reads it for context.');
+  lastContext = context;
+  return context;
+}
+
 export async function gatherRepoContext(
   token: string,
   repositoryUrl: string,
   pullRequestUrl: string,
 ): Promise<string> {
-  for (const url of [repositoryUrl, pullRequestUrl]) {
-    const owner = (parsePullRequest(url) ?? parseGitHubRepo(url))?.owner;
-    if (owner && !ALLOWED_OWNERS.includes(owner.toLowerCase())) {
-      throw new Error(`For safety, AI drafts only read repositories owned by ${ALLOWED_OWNERS.join(', ')} — ${owner} is not on that list.`);
-    }
-  }
-  const context = await collectEvidence(token, repositoryUrl, pullRequestUrl);
-  if (!context.sources.length) throw new Error('Add a repository (or pull request) link first — the AI reads it for context.');
-  lastContext = context;
-  return serializeContext(context);
+  return serializeContext(await collectProjectEvidence(token, repositoryUrl, pullRequestUrl));
 }
 
 const SYSTEM_PROMPT = 'You help a developer document their portfolio projects. Use only the provided evidence and draft. Reply with the final text only — no preamble, no quotes, no markdown.';
