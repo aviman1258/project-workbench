@@ -52,7 +52,7 @@ const { id } = Astro.props;
   import { TOKEN_EVENT, deleteVaultFile, encodeText, findVaultFolder, getStoredToken, getVaultFile, getVaultText, getVaultBlobUrl, listVaultArtifacts, putVaultFile } from '../lib/github-client';
   import { artifactKind, carouselHtml, renderPdfPreviews, wireCarousel, type CarouselArtifact } from '../lib/artifact-carousel';
   import { openFieldEditor } from '../lib/field-editor';
-  import { aiComplete, gatherRepoContext } from '../lib/ai-complete';
+  import { aiComplete, describeLastEvidence, gatherRepoContext } from '../lib/ai-complete';
 
   const root = document.querySelector<HTMLElement>('[data-private-vault]');
   if (root) {
@@ -325,6 +325,7 @@ const { id } = Astro.props;
                   return aiComplete({ field: field as 'description' | 'why', existing, projectName: currentValue('name'), context });
                 }
               : undefined,
+            aiEvidenceNote: describeLastEvidence,
             onApply: async (value) => {
               await patchVaultMeta((metadata) => {
                 if ((field === 'repositoryUrl' || field === 'pullRequestUrl') && !value) delete metadata[field];

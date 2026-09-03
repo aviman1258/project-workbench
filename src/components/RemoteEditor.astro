@@ -22,7 +22,7 @@ const { folder } = Astro.props;
   import { parse, stringify } from 'yaml';
   import { TOKEN_EVENT, encodeText, getFile, getStoredToken, putFile, deleteFile } from '../lib/github-client';
   import { openFieldEditor } from '../lib/field-editor';
-  import { aiComplete, gatherRepoContext } from '../lib/ai-complete';
+  import { aiComplete, describeLastEvidence, gatherRepoContext } from '../lib/ai-complete';
 
   const root = document.querySelector<HTMLElement>('[data-remote-editor]');
   if (root) {
@@ -147,6 +147,7 @@ const { folder } = Astro.props;
                 });
               }
             : undefined,
+          aiEvidenceNote: describeLastEvidence,
           onApply: async (value) => {
             await patchFrontmatter((metadata) => {
               if ((field === 'repositoryUrl' || field === 'pullRequestUrl') && !value) delete metadata[field];

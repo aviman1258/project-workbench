@@ -20,6 +20,8 @@ export interface OpenFieldEditorOptions {
   statusNote?: string;
   /** enables the AI button on textareas: returns the completed text */
   aiComplete?: (existing: string) => Promise<string>;
+  /** one-line description of the evidence behind the last draft, shown after success */
+  aiEvidenceNote?: () => string;
   onApply: (value: string) => Promise<void>;
 }
 
@@ -101,7 +103,10 @@ export function openFieldEditor(options: OpenFieldEditorOptions) {
           while (history.length > AI_UNDO_DEPTH) history.shift();
           textarea.value = draft;
           undoButton.hidden = false;
-          aiNote.textContent = 'Drafted. Press again for another take, or Undo.';
+          const evidence = options.aiEvidenceNote?.();
+          aiNote.textContent = evidence
+            ? `Drafted from ${evidence}. Press again for another take, or Undo.`
+            : 'Drafted. Press again for another take, or Undo.';
         } catch (error) {
           aiNote.textContent = (error as Error).message || 'The AI draft failed.';
         } finally {
