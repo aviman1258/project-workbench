@@ -1058,6 +1058,13 @@ a {
   text-transform: capitalize;
 }
 
+/* capitalize mangles URLs — link text renders lowercase */
+.project-card__meta dd a,
+.metadata-strip dd a,
+.sidebar-record dd a {
+  text-transform: lowercase;
+}
+
 .tag-list {
   position: relative;
   z-index: 1;
@@ -2310,6 +2317,50 @@ body:not([data-github-connected='true']) .site-action--needs-github {
   padding: 26px 14px;
   color: var(--forest);
   font-size: 14px;
+}
+
+/* once pdf.js has rendered the first page, the link becomes the preview image */
+.vault-media__pdf--ready {
+  padding: 0;
+}
+
+.vault-media__pdf--ready img {
+  width: 100%;
+  display: block;
+}
+
+.vault-media-actions {
+  margin-top: 22px;
+}
+
+.vault-media figure {
+  position: relative;
+}
+
+.vault-media__delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 85%);
+  color: var(--red);
+  cursor: pointer;
+}
+
+.vault-media__delete svg {
+  width: 15px;
+  height: 15px;
+}
+
+.vault-media__delete:hover,
+.vault-media__delete:focus-visible {
+  border-color: var(--red);
+  background: var(--red-light);
 }
 
 .remote-editor-hint {

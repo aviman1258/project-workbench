@@ -117,6 +117,18 @@ export function putVaultFile(token: string, path: string, contentBase64: string,
   });
 }
 
+export async function deleteVaultFile(token: string, path: string, message: string) {
+  const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+  // no-store: the gallery fetches this same URL with Accept: raw for the image
+  // bytes, and the browser cache would hand those bytes back to this JSON read
+  const file = await gh(token, `/repos/${GITHUB_OWNER}/${VAULT_REPO}/contents/${encodedPath}`, { cache: 'no-store' });
+  if (!file.sha) throw new Error(`${path} could not be looked up for deletion.`);
+  return gh(token, `/repos/${GITHUB_OWNER}/${VAULT_REPO}/contents/${encodedPath}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ message, sha: String(file.sha), branch: GITHUB_BRANCH }),
+  });
+}
+
 export async function listVaultArtifacts(token: string, folder: string): Promise<{ name: string; path: string; size: number }[]> {
   try {
     const entries = await gh(token, `/repos/${GITHUB_OWNER}/${VAULT_REPO}/contents/projects/${folder}/artifacts`);

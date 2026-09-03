@@ -21,13 +21,26 @@ const { id } = Astro.props;
       <p data-vault-why></p>
     </div>
 
+    <div class="vault-media-actions">
+      <button type="button" class="media-add-button" data-vault-media-add>＋ Add media</button>
+      <input type="file" multiple accept=".png,.jpg,.jpeg,.pdf,.mp4" hidden data-vault-media-input />
+    </div>
     <div class="vault-media" data-vault-media></div>
   </article>
+
+  <dialog class="media-delete-dialog" data-vault-delete-dialog>
+    <h3>Delete this artifact?</h3>
+    <p><strong data-vault-delete-name></strong> will be removed from the private vault. This cannot be undone.</p>
+    <div class="media-delete-dialog__actions">
+      <button type="button" class="media-delete-dialog__cancel" data-vault-delete-cancel>Cancel</button>
+      <button type="button" class="media-delete-dialog__confirm" data-vault-delete-confirm>Delete</button>
+    </div>
+  </dialog>
 </section>
 
 <script>
   import { parse, stringify } from 'yaml';
-  import { TOKEN_EVENT, encodeText, findVaultFolder, getStoredToken, getVaultFile, getVaultText, getVaultBlobUrl, listVaultArtifacts, putVaultFile } from '../lib/github-client';
+  import { TOKEN_EVENT, deleteVaultFile, encodeText, findVaultFolder, getStoredToken, getVaultFile, getVaultText, getVaultBlobUrl, listVaultArtifacts, putVaultFile } from '../lib/github-client';
   import { openFieldEditor } from '../lib/field-editor';
   import { aiComplete, gatherRepoContext } from '../lib/ai-complete';
 
@@ -45,6 +58,165 @@ const { id } = Astro.props;
       : /\.mp4$/i.test(name) ? 'video/mp4'
       : /\.png$/i.test(name) ? 'image/png'
       : 'image/jpeg';
+
+    // Set at unlock; the add/delete handlers below need them afterwards.
+    let vaultToken = '';
+    let vaultFolder = '';
+
+    const TRASH = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>`;
+
+    const deleteDialog = root.querySelector<HTMLDialogElement>('[data-vault-delete-dialog]')!;
+    const deleteNameEl = root.querySelector<HTMLElement>('[data-vault-delete-name]')!;
+    let pendingDelete: { name: string; path: string } | null = null;
+    const confirmDelete = (name: string, path: string) => {
+      pendingDelete = { name, path };
+      deleteNameEl.textContent = name;
+      deleteDialog.showModal();
+    };
+    root.querySelector('[data-vault-delete-cancel]')?.addEventListener('click', () => deleteDialog.close());
+    deleteDialog.addEventListener('click', (event) => { if (event.target === deleteDialog) deleteDialog.close(); });
+    root.querySelector('[data-vault-delete-confirm]')?.addEventListener('click', async () => {
+      if (!pendingDelete || !vaultToken) return;
+      const { name, path } = pendingDelete;
+      deleteDialog.close();
+      status.textContent = `Deleting ${name}…`;
+      try {
+        await deleteVaultFile(vaultToken, path, `Delete ${name} from the private project`);
+        await loadMediaSettled(vaultToken, vaultFolder, lastMediaCount - 1);
+        status.textContent = '';
+      } catch (error) {
+        status.textContent = (error as Error).message || `${name} could not be deleted.`;
+      }
+    });
+
+    const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '');
+      reader.onerror = () => reject(new Error(`${file.name} could not be read.`));
+      reader.readAsDataURL(file);
+    });
+
+    const addButton = root.querySelector<HTMLButtonElement>('[data-vault-media-add]')!;
+    const fileInput = root.querySelector<HTMLInputElement>('[data-vault-media-input]')!;
+    addButton.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', async () => {
+      const files = [...(fileInput.files ?? [])];
+      fileInput.value = '';
+      if (!files.length || !vaultToken) return;
+      for (const file of files) {
+        const name = file.name.replace(/[^a-zA-Z0-9._-]/g, '-');
+        status.textContent = `Uploading ${name}…`;
+        try {
+          await putVaultFile(vaultToken, `projects/${vaultFolder}/artifacts/${name}`, await fileToBase64(file), `Add ${name} to the private project`);
+        } catch (error) {
+          status.textContent = /already exists|sha/i.test((error as Error).message ?? '')
+            ? `${name} already exists in the vault — rename the file to replace it.`
+            : `${name}: ${(error as Error).message}`;
+          return;
+        }
+      }
+      status.textContent = 'Refreshing media…';
+      await loadMediaSettled(vaultToken, vaultFolder, lastMediaCount + files.length);
+      status.textContent = '';
+    });
+
+    // First page of each PDF becomes its preview, same as the public carousel;
+    // the "open PDF" link stays as the fallback while (or if) rendering fails.
+    const renderPdfPreviews = async (targets: { el: HTMLElement; url: string }[]) => {
+      if (!targets.length) return;
+      try {
+        const pdfjs = await import('pdfjs-dist');
+        const worker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
+        pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+        for (const { el, url } of targets) {
+          try {
+            const doc = await pdfjs.getDocument({ url }).promise;
+            const page = await doc.getPage(1);
+            const base = page.getViewport({ scale: 1 });
+            const viewport = page.getViewport({ scale: Math.min(900 / base.width, 4) });
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.ceil(viewport.width);
+            canvas.height = Math.ceil(viewport.height);
+            const context = canvas.getContext('2d');
+            if (!context) continue;
+            await page.render({ canvas, canvasContext: context, viewport }).promise;
+            const img = document.createElement('img');
+            img.src = canvas.toDataURL('image/png');
+            img.alt = 'First page of the PDF';
+            el.replaceChildren(img);
+            el.classList.add('vault-media__pdf--ready');
+          } catch (error) {
+            console.error('[vault pdf] could not render', error);
+          }
+        }
+      } catch (error) {
+        console.error('[vault pdf] pdf.js failed to load', error);
+      }
+    };
+
+    // GitHub's contents listing can lag a just-made commit, so after an add or
+    // delete we re-list until the expected count shows up.
+    let lastMediaCount = 0;
+    const loadMediaSettled = async (token: string, folder: string, expected: number) => {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        if ((await loadMedia(token, folder)) === expected) return;
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+    };
+
+    // Renders the media grid; re-run after adds and deletes.
+    const loadMedia = async (token: string, folder: string) => {
+      const artifacts = await listVaultArtifacts(token, folder);
+      mediaEl.replaceChildren();
+      const pdfTargets: { el: HTMLElement; url: string }[] = [];
+      for (const artifact of artifacts) {
+        const url = await getVaultBlobUrl(token, artifact.path, mime(artifact.name));
+        let element: HTMLElement;
+        if (/\.mp4$/i.test(artifact.name)) {
+          const video = document.createElement('video');
+          video.src = url;
+          video.controls = true;
+          element = video;
+        } else if (/\.pdf$/i.test(artifact.name)) {
+          const link = document.createElement('a');
+          link.href = url;
+          link.target = '_blank';
+          link.rel = 'noreferrer';
+          link.className = 'vault-media__pdf';
+          link.textContent = `▤ ${artifact.name} (open PDF)`;
+          pdfTargets.push({ el: link, url });
+          element = link;
+        } else {
+          const img = document.createElement('img');
+          img.src = url;
+          img.alt = artifact.name;
+          element = img;
+        }
+        const figure = document.createElement('figure');
+        figure.append(element);
+        const caption = document.createElement('figcaption');
+        caption.textContent = artifact.name;
+        figure.append(caption);
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'vault-media__delete';
+        del.setAttribute('aria-label', `Delete ${artifact.name}`);
+        del.title = `Delete ${artifact.name}`;
+        del.innerHTML = TRASH;
+        del.addEventListener('click', () => confirmDelete(artifact.name, artifact.path));
+        figure.append(del);
+        mediaEl.append(figure);
+      }
+      if (!artifacts.length) {
+        const empty = document.createElement('p');
+        empty.className = 'remote-editor-hint';
+        empty.textContent = 'No media attached to this project — use ＋ Add media above.';
+        mediaEl.append(empty);
+      }
+      void renderPdfPreviews(pdfTargets);
+      lastMediaCount = artifacts.length;
+      return artifacts.length;
+    };
 
     const unlock = async (token: string) => {
       if (loaded || !token) return;
@@ -79,43 +251,9 @@ const { id } = Astro.props;
 
         content.hidden = false;
         status.textContent = 'Loading media…';
-        const artifacts = await listVaultArtifacts(token, folder);
-        mediaEl.replaceChildren();
-        for (const artifact of artifacts) {
-          const url = await getVaultBlobUrl(token, artifact.path, mime(artifact.name));
-          let element: HTMLElement;
-          if (/\.mp4$/i.test(artifact.name)) {
-            const video = document.createElement('video');
-            video.src = url;
-            video.controls = true;
-            element = video;
-          } else if (/\.pdf$/i.test(artifact.name)) {
-            const link = document.createElement('a');
-            link.href = url;
-            link.target = '_blank';
-            link.rel = 'noreferrer';
-            link.className = 'vault-media__pdf';
-            link.textContent = `▤ ${artifact.name} (open PDF)`;
-            element = link;
-          } else {
-            const img = document.createElement('img');
-            img.src = url;
-            img.alt = artifact.name;
-            element = img;
-          }
-          const figure = document.createElement('figure');
-          figure.append(element);
-          const caption = document.createElement('figcaption');
-          caption.textContent = artifact.name;
-          figure.append(caption);
-          mediaEl.append(figure);
-        }
-        if (!artifacts.length) {
-          const empty = document.createElement('p');
-          empty.className = 'remote-editor-hint';
-          empty.textContent = 'No media attached to this project.';
-          mediaEl.append(empty);
-        }
+        vaultToken = token;
+        vaultFolder = folder;
+        await loadMedia(token, folder);
         status.textContent = '';
         loaded = true;
         enableVaultEditing(token, folder);
