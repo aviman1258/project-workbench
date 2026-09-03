@@ -250,6 +250,7 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
     startAuthentication,
     startRegistration,
   } from '@simplewebauthn/browser';
+  import { renderPdfPreviews, wireCarousel } from '../../lib/artifact-carousel';
 
   type FormError = Error & { field?: string; authRequired?: boolean; authProvider?: string; status?: number };
 
@@ -281,86 +282,8 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
     try { window.sessionStorage.setItem('media-op-return', 'tiles'); } catch { /* ignore */ }
   };
 
-  // Render the first page of each PDF artifact as its preview (carousel slide and
-  // thumbnail tile). The generic "PDF / Open to preview" card stays as the fallback.
-  void (async () => {
-    const targets = [...document.querySelectorAll<HTMLElement>('[data-pdf-preview]')];
-    if (!targets.length) return;
-    try {
-      const pdfjs = await import('pdfjs-dist');
-      const worker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
-      pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
-      const rendered = new Map<string, string>();
-
-      for (const target of targets) {
-        const href = target.dataset.pdfPreview ?? '';
-        try {
-          let dataUrl = rendered.get(href);
-          if (!dataUrl) {
-            const doc = await pdfjs.getDocument({ url: new URL(href, window.location.origin).toString() }).promise;
-            const page = await doc.getPage(1);
-            const base = page.getViewport({ scale: 1 });
-            // render wide enough for the big slide; tiles reuse the same bitmap
-            const scale = Math.min(1200 / base.width, 4);
-            const viewport = page.getViewport({ scale });
-            const canvas = document.createElement('canvas');
-            canvas.width = Math.ceil(viewport.width);
-            canvas.height = Math.ceil(viewport.height);
-            const context = canvas.getContext('2d');
-            if (!context) continue;
-            await page.render({ canvas, canvasContext: context, viewport }).promise;
-            dataUrl = canvas.toDataURL('image/png');
-            rendered.set(href, dataUrl);
-          }
-          const img = document.createElement('img');
-          img.src = dataUrl;
-          img.alt = 'First page of the PDF';
-          img.draggable = false;
-          target.replaceChildren(img);
-          target.classList.add('pdf-preview--ready');
-        } catch (error) {
-          console.error('[pdf-preview] could not render', href, error);
-        }
-      }
-    } catch (error) {
-      console.error('[pdf-preview] pdf.js failed to load', error);
-    }
-  })();
-
-  document.querySelectorAll<HTMLElement>('[data-artifact-carousel]').forEach((carousel) => {
-    const track = carousel.querySelector<HTMLElement>('[data-carousel-track]');
-    const slides = [...carousel.querySelectorAll<HTMLElement>('[data-carousel-slide]')];
-    const thumbnails = [...carousel.querySelectorAll<HTMLButtonElement>('[data-carousel-thumbnail]')];
-    const currentLabel = carousel.querySelector<HTMLElement>('[data-carousel-current]');
-    let current = 0;
-    let touchStartX = 0;
-
-    const show = (next: number) => {
-      if (!track || slides.length === 0) return;
-      current = (next + slides.length) % slides.length;
-      track.style.transform = `translateX(-${current * 100}%)`;
-      slides.forEach((slide, index) => slide.setAttribute('aria-hidden', String(index !== current)));
-      thumbnails.forEach((thumbnail, index) => {
-        thumbnail.dataset.active = String(index === current);
-        if (index === current) thumbnail.setAttribute('aria-current', 'true');
-        else thumbnail.removeAttribute('aria-current');
-      });
-      if (currentLabel) currentLabel.textContent = String(current + 1);
-    };
-
-    carousel.querySelector<HTMLButtonElement>('[data-carousel-previous]')?.addEventListener('click', () => show(current - 1));
-    carousel.querySelector<HTMLButtonElement>('[data-carousel-next]')?.addEventListener('click', () => show(current + 1));
-    thumbnails.forEach((thumbnail, index) => thumbnail.addEventListener('click', () => show(index)));
-    carousel.addEventListener('keydown', (event) => {
-      if (event.key === 'ArrowLeft') { event.preventDefault(); show(current - 1); }
-      if (event.key === 'ArrowRight') { event.preventDefault(); show(current + 1); }
-    });
-    carousel.addEventListener('touchstart', (event) => { touchStartX = event.changedTouches[0]?.clientX ?? 0; }, { passive: true });
-    carousel.addEventListener('touchend', (event) => {
-      const distance = (event.changedTouches[0]?.clientX ?? touchStartX) - touchStartX;
-      if (Math.abs(distance) > 45) show(current + (distance < 0 ? 1 : -1));
-    }, { passive: true });
-  });
+  void renderPdfPreviews(document);
+  document.querySelectorAll<HTMLElement>('[data-artifact-carousel]').forEach(wireCarousel);
 
   const setBusy = (form: HTMLFormElement, busy: boolean) => {
     const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');

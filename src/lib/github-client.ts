@@ -26,6 +26,9 @@ export function clearToken() {
 
 export async function gh(token: string, path: string, init: RequestInit = {}): Promise<Record<string, any>> {
   const response = await fetch(`https://api.github.com${path}`, {
+    // GitHub API responses are cacheable for 60s and the browser will happily
+    // serve a stale listing right after we commit — always hit the network.
+    cache: 'no-store',
     ...init,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -119,9 +122,7 @@ export function putVaultFile(token: string, path: string, contentBase64: string,
 
 export async function deleteVaultFile(token: string, path: string, message: string) {
   const encodedPath = path.split('/').map(encodeURIComponent).join('/');
-  // no-store: the gallery fetches this same URL with Accept: raw for the image
-  // bytes, and the browser cache would hand those bytes back to this JSON read
-  const file = await gh(token, `/repos/${GITHUB_OWNER}/${VAULT_REPO}/contents/${encodedPath}`, { cache: 'no-store' });
+  const file = await gh(token, `/repos/${GITHUB_OWNER}/${VAULT_REPO}/contents/${encodedPath}`);
   if (!file.sha) throw new Error(`${path} could not be looked up for deletion.`);
   return gh(token, `/repos/${GITHUB_OWNER}/${VAULT_REPO}/contents/${encodedPath}`, {
     method: 'DELETE',
