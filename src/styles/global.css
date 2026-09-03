@@ -2024,6 +2024,16 @@ body:not([data-github-connected='true']) .site-action--needs-github {
   margin-left: 0;
 }
 
+/* the metadata strip's columns sit close together, so a hanging pencil bleeds
+   into the neighbour (or floats mid-column next to an empty “—”) — flow it
+   inline right after the value there instead */
+.metadata-strip dd.inline-editable > .inline-edit {
+  position: static;
+  margin-left: 8px;
+  width: 26px;
+  height: 26px;
+}
+
 .inline-edit {
   width: 30px;
   height: 30px;
