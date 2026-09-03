@@ -231,7 +231,9 @@ const { id } = Astro.props;
       } catch { /* ordering metadata is best-effort — the files are already committed */ }
       mediaStatus.textContent = 'Refreshing media…';
       await loadMediaSettled(lastMediaCount + uploaded.length);
-      mediaStatus.textContent = '';
+      mediaStatus.textContent = uploaded.some((name) => /\.pptx?$/i.test(name))
+        ? 'PowerPoints convert to PDF automatically — reload this page in a couple of minutes.'
+        : '';
     });
 
     // --- unlock: fetch the real content once a token can see the vault ---

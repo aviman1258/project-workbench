@@ -1,0 +1,47 @@
+name: Convert PowerPoint artifacts to PDF
+
+on:
+  push:
+    branches: [main]
+    paths: ['src/content/projects/**/artifacts/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: convert-pptx
+  cancel-in-progress: false
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Look for PowerPoint files
+        id: scan
+        run: |
+          if find src/content/projects -path '*/artifacts/*' \( -iname '*.pptx' -o -iname '*.ppt' \) | grep -q .; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install LibreOffice
+        if: steps.scan.outputs.found == 'true'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-impress
+      - name: Convert to PDF
+        if: steps.scan.outputs.found == 'true'
+        run: node scripts/convert-pptx.mjs
+      - name: Commit and redeploy
+        if: steps.scan.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "workbench-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "Convert PowerPoint artifacts to PDF"
+            git push
+            # a GITHUB_TOKEN push does not trigger the deploy workflow — dispatch it
+            gh workflow run deploy.yml
+          fi

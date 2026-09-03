@@ -171,7 +171,7 @@ const { folder } = Astro.props;
     mediaInput.addEventListener('change', async () => {
       const files = [...(mediaInput.files ?? [])].filter((file) => file.name.includes('.') && file.size <= 20 * 1024 * 1024);
       mediaInput.value = '';
-      if (!files.length) { setStatus('PNG, JPG, PDF, or MP4 up to 20 MB.'); return; }
+      if (!files.length) { setStatus('Files need an extension and must be 20 MB or less.'); return; }
       try {
         for (const [index, file] of files.entries()) {
           const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
@@ -190,7 +190,9 @@ const { folder } = Astro.props;
             if (!metadata.featuredArtifact) metadata.featuredArtifact = filename;
           }, `Touch updated date for ${filename}`);
         }
-        setStatus('Committed. The carousel updates after the site rebuilds in about a minute.');
+        setStatus(files.some((file) => /\.pptx?$/i.test(file.name))
+          ? 'Committed. PowerPoints convert to PDF automatically — allow a couple of extra minutes before the rebuilt site shows them.'
+          : 'Committed. The carousel updates after the site rebuilds in about a minute.');
       } catch (error) {
         handleAuthFailure(error);
         setStatus((error as Error).message || 'The upload failed.');
