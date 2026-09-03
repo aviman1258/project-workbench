@@ -1,16 +1,17 @@
 ---
-// Stage 1 of the demo pipeline on the project page: "What changed?".
-// Hosted builds only; needs GitHub connected (evidence) + an AI key (analysis).
-// Results are drafts rendered in place — nothing persists until later phases
-// add review/approval.
+// The demo pipeline on the project page: Stage 1 "what changed", Stage 2 "why
+// it matters", Stage 3 "how to demo it", then deterministic renderings of the
+// same structured analysis. Hosted builds only; needs GitHub connected
+// (evidence) + an AI key (analysis). Everything shown is a draft — nothing
+// persists until a later phase adds review/approval.
 ---
 
 <section class="artifacts-section change-analysis" data-change-analysis>
   <div class="section-heading section-heading--detail">
     <div>
-      <h2>What changed</h2>
-      <p>AI code investigation of the linked repository or pull request. Every claim cites its evidence; unknowns stay unknown.</p>
-      <button type="button" class="media-add-button" data-analysis-run>✦ Analyze changes</button>
+      <h2>Demo lab</h2>
+      <p>AI investigation of the linked repository or pull request — what changed, why it matters, and how to demo it. Every claim cites its evidence; unknowns stay unknown.</p>
+      <button type="button" class="media-add-button" data-analysis-run>✦ What changed</button>
     </div>
   </div>
   <p class="form-status media-status" data-analysis-status aria-live="polite"></p>
@@ -20,7 +21,11 @@
 <script>
   import { collectProjectEvidence, describeLastEvidence } from '../lib/ai-complete';
   import { getStoredToken } from '../lib/github-client';
-  import { escalationReasons, investigateChanges, type ChangeUnderstanding, type Claim } from '../lib/ai/pipeline';
+  import {
+    analyzeProduct, directDemo, escalationReasons, investigateChanges,
+    type ChangeUnderstanding, type Claim, type DemoPlan, type ProductUnderstanding,
+  } from '../lib/ai/pipeline';
+  import { RENDER_LABELS, renderAll, type RenderKind } from '../lib/ai/renderers';
   import type { RepositoryContext } from '../lib/ai/evidence';
 
   const root = document.querySelector<HTMLElement>('[data-change-analysis]');
@@ -29,9 +34,20 @@
     const status = root.querySelector<HTMLElement>('[data-analysis-status]')!;
     const result = root.querySelector<HTMLElement>('[data-analysis-result]')!;
 
+    let context: RepositoryContext | null = null;
+    let changes: ChangeUnderstanding | null = null;
+    let product: ProductUnderstanding | null = null;
+
     const fieldValue = (field: string) => {
       const display = document.querySelector<HTMLElement>(`[data-field-display="${field}"]`);
       return display?.dataset.value ?? '';
+    };
+
+    const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string) => {
+      const node = document.createElement(tag);
+      node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
     };
 
     const basisLabel: Record<Claim['basis'], string> = {
@@ -41,112 +57,216 @@
       unknown: 'unknown',
     };
 
-    const renderClaims = (title: string, claims: Claim[], context: RepositoryContext) => {
-      if (!claims.length) return null;
-      const block = document.createElement('div');
-      block.className = 'change-analysis__block';
-      const heading = document.createElement('h3');
-      heading.textContent = title;
-      block.append(heading);
-      for (const claim of claims) {
-        const row = document.createElement('div');
-        row.className = 'change-analysis__claim';
-        const text = document.createElement('p');
-        text.textContent = claim.value;
-        row.append(text);
-        const meta = document.createElement('div');
-        meta.className = 'change-analysis__meta';
-        const basis = document.createElement('span');
-        basis.className = `change-analysis__basis change-analysis__basis--${claim.basis}`;
-        basis.textContent = `${basisLabel[claim.basis]} · ${Math.round(claim.confidence * 100)}%`;
-        meta.append(basis);
-        for (const id of claim.evidence.slice(0, 6)) {
-          const chip = document.createElement('span');
-          chip.className = 'change-analysis__chip';
-          chip.textContent = id;
-          const source = context.sources.find((s) => s.id === id);
-          if (source) chip.title = source.text.slice(0, 400);
-          meta.append(chip);
-        }
-        row.append(meta);
-        block.append(row);
+    const claimMeta = (claim: Claim) => {
+      const meta = el('div', 'change-analysis__meta');
+      const basis = el('span', `change-analysis__basis change-analysis__basis--${claim.basis}`,
+        `${basisLabel[claim.basis]} · ${Math.round(claim.confidence * 100)}%`);
+      meta.append(basis);
+      for (const id of claim.evidence.slice(0, 6)) {
+        const chip = el('span', 'change-analysis__chip', id);
+        const source = context?.sources.find((s) => s.id === id);
+        if (source) chip.title = source.text.slice(0, 400);
+        meta.append(chip);
       }
-      return block;
+      return meta;
     };
 
-    const render = (analysis: ChangeUnderstanding, context: RepositoryContext) => {
+    const claimRow = (claim: Claim, label?: string) => {
+      const row = el('div', 'change-analysis__claim');
+      const text = el('p', '');
+      if (label) {
+        const strong = document.createElement('strong');
+        strong.textContent = `${label} — `;
+        text.append(strong);
+      }
+      text.append(claim.value);
+      row.append(text, claimMeta(claim));
+      return row;
+    };
+
+    const block = (title: string) => {
+      const wrap = el('div', 'change-analysis__block');
+      wrap.append(el('h3', '', title));
+      return wrap;
+    };
+
+    const unknownsBlock = (unknowns: string[]) => {
+      const wrap = el('div', 'change-analysis__block change-analysis__block--unknowns');
+      wrap.append(el('h3', '', 'Unknowns'));
+      for (const item of unknowns) wrap.append(el('p', '', item));
+      return wrap;
+    };
+
+    const nextButton = (label: string, handler: () => void) => {
+      const wrap = el('div', 'change-analysis__escalate');
+      const button = el('button', 'media-add-button', label);
+      button.type = 'button';
+      button.addEventListener('click', () => { wrap.remove(); handler(); });
+      wrap.append(button);
+      return wrap;
+    };
+
+    const escalateRow = (reasons: string[], label: string, handler: () => void) => {
+      const wrap = el('div', 'change-analysis__escalate');
+      wrap.append(el('span', 'field-editor__hint', `Worth a stronger model? Signals: ${reasons.join('; ')}.`));
+      const retry = el('button', 'media-add-button', label);
+      retry.type = 'button';
+      retry.addEventListener('click', handler);
+      wrap.append(retry);
+      return wrap;
+    };
+
+    // --- stage renderers ---
+
+    const renderStage1 = (analysis: ChangeUnderstanding) => {
       result.replaceChildren();
-      const summary = document.createElement('p');
-      summary.className = 'change-analysis__summary';
-      summary.textContent = analysis.summary;
-      result.append(summary);
-
-      for (const block of [
-        renderClaims('User-facing changes', analysis.userFacingChanges, context),
-        renderClaims('Technical changes', analysis.technicalChanges, context),
-      ]) if (block) result.append(block);
-
-      if (analysis.affectedFlows.length) {
-        const flows = document.createElement('p');
-        flows.className = 'change-analysis__flows';
-        flows.textContent = `Affected flows: ${analysis.affectedFlows.join(' · ')}`;
-        result.append(flows);
-      }
-      if (analysis.unknowns.length) {
-        const unknowns = document.createElement('div');
-        unknowns.className = 'change-analysis__block change-analysis__block--unknowns';
-        const heading = document.createElement('h3');
-        heading.textContent = 'Unknowns';
-        unknowns.append(heading);
-        for (const item of analysis.unknowns) {
-          const p = document.createElement('p');
-          p.textContent = item;
-          unknowns.append(p);
-        }
-        result.append(unknowns);
-      }
-
-      const foot = document.createElement('p');
-      foot.className = 'change-analysis__foot';
-      foot.textContent = `Overall confidence ${Math.round(analysis.confidence * 100)}% · grounded in ${describeLastEvidence()}. This is an AI draft, not the record.`;
-      result.append(foot);
-
-      const reasons = escalationReasons(context.signals, analysis);
-      if (reasons.length) {
-        const escalate = document.createElement('div');
-        escalate.className = 'change-analysis__escalate';
-        const note = document.createElement('span');
-        note.className = 'field-editor__hint';
-        note.textContent = `Worth a stronger model? Signals: ${reasons.join('; ')}.`;
-        const retry = document.createElement('button');
-        retry.type = 'button';
-        retry.className = 'media-add-button';
-        retry.textContent = 'Re-analyze with the stronger model';
-        retry.addEventListener('click', () => void run('strong'));
-        escalate.append(note, retry);
-        result.append(escalate);
-      }
       result.hidden = false;
+      result.append(el('p', 'change-analysis__summary', analysis.summary));
+
+      if (analysis.userFacingChanges.length) {
+        const wrap = block('User-facing changes');
+        for (const claim of analysis.userFacingChanges) wrap.append(claimRow(claim));
+        result.append(wrap);
+      }
+      if (analysis.technicalChanges.length) {
+        const wrap = block('Technical changes');
+        for (const claim of analysis.technicalChanges) wrap.append(claimRow(claim));
+        result.append(wrap);
+      }
+      if (analysis.affectedFlows.length) result.append(el('p', 'change-analysis__flows', `Affected flows: ${analysis.affectedFlows.join(' · ')}`));
+      if (analysis.unknowns.length) result.append(unknownsBlock(analysis.unknowns));
+      result.append(el('p', 'change-analysis__foot',
+        `Overall confidence ${Math.round(analysis.confidence * 100)}% · grounded in ${describeLastEvidence()}. This is an AI draft, not the record.`));
+
+      const reasons = context ? escalationReasons(context.signals, analysis) : [];
+      if (reasons.length) result.append(escalateRow(reasons, 'Re-analyze with the stronger model', () => void runStage1('strong')));
+      result.append(nextButton('✦ Why it matters →', () => void runStage2('fast')));
     };
 
-    const run = async (tier: 'fast' | 'strong') => {
-      const token = getStoredToken();
-      if (!token) { status.textContent = 'Connect GitHub with the connections icon in the header first.'; return; }
+    const PRODUCT_LABELS: [keyof ProductUnderstanding, string][] = [
+      ['problem', 'Problem'],
+      ['user', 'Who it affects'],
+      ['previousBehavior', 'Before'],
+      ['newBehavior', 'Now'],
+      ['value', 'Value'],
+      ['workflow', 'Workflow'],
+    ];
+
+    const renderStage2 = (analysis: ProductUnderstanding) => {
+      root.querySelector('[data-stage-product]')?.remove();
+      root.querySelector('[data-stage-plan]')?.remove();
+      const section = block('Why it matters');
+      section.setAttribute('data-stage-product', '');
+      let anyClaim = false;
+      for (const [field, label] of PRODUCT_LABELS) {
+        const claim = analysis[field] as Claim | undefined;
+        if (claim && typeof claim === 'object' && 'value' in claim) { section.append(claimRow(claim, label)); anyClaim = true; }
+      }
+      if (!anyClaim) section.append(el('p', 'change-analysis__flows', 'Product motivation: insufficient evidence.'));
+      if (analysis.unknowns.length) section.append(unknownsBlock(analysis.unknowns));
+      section.append(el('p', 'change-analysis__foot', `Stage confidence ${Math.round(analysis.confidence * 100)}%.`));
+
+      const reasons = context ? escalationReasons(context.signals, analysis) : [];
+      if (reasons.length) section.append(escalateRow(reasons, 'Re-infer with the stronger model', () => void runStage2('strong')));
+      section.append(nextButton('✦ Build the demo plan →', () => void runStage3('fast')));
+      result.append(section);
+      section.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    };
+
+    const renderStage3 = (plan: DemoPlan) => {
+      root.querySelector('[data-stage-plan]')?.remove();
+      const section = block(`Demo plan — ${plan.title}`);
+      section.setAttribute('data-stage-plan', '');
+      section.append(el('p', 'change-analysis__summary', plan.premise));
+      section.append(el('p', 'change-analysis__flows', `Audience: ${plan.audience}${plan.prerequisites.length ? ` · Prepare: ${plan.prerequisites.join('; ')}` : ''}`));
+
+      for (const [index, step] of plan.steps.entries()) {
+        const row = el('div', 'change-analysis__claim');
+        const action = el('p', '');
+        const strong = document.createElement('strong');
+        strong.textContent = `${index + 1}. ${step.action}`;
+        action.append(strong, ` → ${step.expectedState}`);
+        row.append(action);
+        row.append(el('p', 'change-analysis__narration', `“${step.narration}”`));
+        row.append(claimMeta({ value: '', evidence: step.evidence, confidence: step.confidence, basis: 'observed' }));
+        section.append(row);
+      }
+      if (plan.limitations.length) {
+        const limits = unknownsBlock(plan.limitations);
+        limits.querySelector('h3')!.textContent = 'Limitations — be upfront about these';
+        section.append(limits);
+      }
+
+      // deterministic renderings of the same analysis
+      const renders = renderAll(changes!, product!, plan);
+      const tabs = el('div', 'change-analysis__tabs');
+      const output = document.createElement('pre');
+      output.className = 'change-analysis__output';
+      const copy = el('button', 'share-dialog__close change-analysis__copy', 'Copy');
+      copy.type = 'button';
+      let currentKind: RenderKind = 'script';
+      const show = (kind: RenderKind) => {
+        currentKind = kind;
+        output.textContent = renders[kind];
+        tabs.querySelectorAll<HTMLButtonElement>('button').forEach((b) => { b.dataset.active = String(b.dataset.kind === kind); });
+      };
+      for (const kind of Object.keys(RENDER_LABELS) as RenderKind[]) {
+        const tab = el('button', 'change-analysis__tab', RENDER_LABELS[kind]);
+        tab.type = 'button';
+        tab.dataset.kind = kind;
+        tab.addEventListener('click', () => show(kind));
+        tabs.append(tab);
+      }
+      copy.addEventListener('click', () => {
+        void navigator.clipboard?.writeText(renders[currentKind]).then(() => { copy.textContent = 'Copied'; setTimeout(() => { copy.textContent = 'Copy'; }, 1500); });
+      });
+      section.append(tabs, output, copy);
+      show('script');
+
+      section.append(el('p', 'change-analysis__foot', `Plan confidence ${Math.round(plan.confidence * 100)}%. All five renderings come from this same structured analysis — drafts, not the record.`));
+      result.append(section);
+      section.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    };
+
+    // --- stage runners ---
+
+    const guarded = async (label: string, work: () => Promise<void>) => {
       runButton.disabled = true;
-      status.textContent = 'Collecting evidence from GitHub…';
       try {
-        const context = await collectProjectEvidence(token, fieldValue('repositoryUrl'), fieldValue('pullRequestUrl'));
-        status.textContent = `Analyzing ${describeLastEvidence()}${tier === 'strong' ? ' with the stronger model' : ''}…`;
-        const analysis = await investigateChanges(context, tier);
+        await work();
         status.textContent = '';
-        render(analysis, context);
       } catch (error) {
-        status.textContent = (error as Error).message || 'The analysis failed.';
+        status.textContent = (error as Error).message || `${label} failed.`;
       } finally {
         runButton.disabled = false;
       }
     };
 
-    runButton.addEventListener('click', () => void run('fast'));
+    const runStage1 = (tier: 'fast' | 'strong') => guarded('The analysis', async () => {
+      const token = getStoredToken();
+      if (!token) { throw new Error('Connect GitHub with the connections icon in the header first.'); }
+      status.textContent = 'Collecting evidence from GitHub…';
+      context = await collectProjectEvidence(token, fieldValue('repositoryUrl'), fieldValue('pullRequestUrl'));
+      status.textContent = `Stage 1 — investigating ${describeLastEvidence()}${tier === 'strong' ? ' (stronger model)' : ''}…`;
+      changes = await investigateChanges(context, tier);
+      product = null;
+      renderStage1(changes);
+    });
+
+    const runStage2 = (tier: 'fast' | 'strong') => guarded('The product analysis', async () => {
+      if (!context || !changes) return;
+      status.textContent = `Stage 2 — inferring why it matters${tier === 'strong' ? ' (stronger model)' : ''}…`;
+      product = await analyzeProduct(context, changes, tier);
+      renderStage2(product);
+    });
+
+    const runStage3 = (tier: 'fast' | 'strong') => guarded('The demo plan', async () => {
+      if (!changes || !product) return;
+      status.textContent = 'Stage 3 — directing the demo…';
+      const plan = await directDemo(changes, product, tier);
+      renderStage3(plan);
+    });
+
+    runButton.addEventListener('click', () => void runStage1('fast'));
   }
 </script>

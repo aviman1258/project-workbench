@@ -2123,6 +2123,53 @@ body:not([data-github-connected='true']) .change-analysis {
   border-top: 1px solid var(--line);
 }
 
+.change-analysis__narration {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.change-analysis__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.change-analysis__tab {
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: 700 10px/1.2 var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.change-analysis__tab[data-active='true'] {
+  border-color: var(--forest);
+  background: var(--forest);
+  color: #fff;
+}
+
+.change-analysis__output {
+  margin: 10px 0 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+  font: 12px/1.6 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.change-analysis__copy {
+  margin-top: 8px;
+}
+
 .create-ai {
   display: flex;
   flex-wrap: wrap;
