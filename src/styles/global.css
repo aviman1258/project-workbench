@@ -2123,6 +2123,19 @@ body:not([data-github-connected='true']) .change-analysis {
   border-top: 1px solid var(--line);
 }
 
+.create-ai {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.create-ai .form-status {
+  margin: 0;
+  flex: 1;
+  min-width: 220px;
+}
+
 .inline-editable > .inline-edit {
   position: absolute;
   top: -10px;

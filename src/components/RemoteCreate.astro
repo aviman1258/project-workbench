@@ -26,6 +26,10 @@ const today = new Date().toISOString().slice(0, 10);
         <label class="field"><span>Why it was built</span><textarea name="why" required maxlength="3000" rows="6" placeholder="What problem, curiosity, or need made you build it?"></textarea></label>
         <label class="field"><span>Repository link</span><input name="repositoryUrl" type="url" data-create-repo maxlength="500" placeholder="https://github.com/owner/repository" /><small>Without a repository, the project stays an Idea. If it's a feature inside a larger repo, add the pull request link too.</small></label>
         <label class="field"><span>Pull request link (optional)</span><input name="pullRequestUrl" type="url" maxlength="500" placeholder="https://github.com/owner/repository/pull/123" /></label>
+        <div class="create-ai">
+          <button type="button" class="media-add-button" data-create-ai>✦ Draft from repository</button>
+          <p class="form-status" data-create-ai-status aria-live="polite">Add the repository (or PR) link above, then let the AI draft the description and why.</p>
+        </div>
         <div class="form-grid form-grid--two">
           <label class="field"><span>Status</span><select name="status" required>{projectStatuses.map((value) => <option value={value}>{formatLabel(value)}</option>)}</select></label>
           <label class="field"><span>Start date</span><input name="startDate" type="date" value={today} required /></label>
@@ -42,6 +46,7 @@ const today = new Date().toISOString().slice(0, 10);
 <script>
   import { stringify } from 'yaml';
   import { clearToken, encodeText, getStoredToken, listProjectFolders, putFile, TOKEN_EVENT } from '../lib/github-client';
+  import { aiComplete, describeLastEvidence, gatherRepoContext } from '../lib/ai-complete';
 
   const root = document.querySelector<HTMLElement>('[data-remote-create]');
   if (root) {
@@ -61,6 +66,38 @@ const today = new Date().toISOString().slice(0, 10);
 
     const form = root.querySelector<HTMLFormElement>('[data-remote-create-form]')!;
     const status = root.querySelector<HTMLElement>('[data-remote-create-status]')!;
+
+    // --- AI: draft description + why from the repository before creating ---
+    const aiButton = root.querySelector<HTMLButtonElement>('[data-create-ai]')!;
+    const aiStatus = root.querySelector<HTMLElement>('[data-create-ai-status]')!;
+    const control = (name: string) => form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement;
+    aiButton.addEventListener('click', async () => {
+      const repositoryUrl = control('repositoryUrl').value.trim();
+      const pullRequestUrl = control('pullRequestUrl').value.trim();
+      if (!repositoryUrl && !pullRequestUrl) {
+        aiStatus.textContent = 'Add a repository or pull request link first — the AI reads it for context.';
+        return;
+      }
+      aiButton.disabled = true;
+      try {
+        aiStatus.textContent = 'Reading the repository…';
+        const context = await gatherRepoContext(token, repositoryUrl, pullRequestUrl);
+        const nameInput = control('name');
+        if (!nameInput.value.trim() && repositoryUrl) {
+          nameInput.value = (repositoryUrl.split('/').pop() ?? '').replace(/[-_]+/g, ' ').trim();
+        }
+        const projectName = nameInput.value.trim() || 'this project';
+        aiStatus.textContent = 'Drafting the description…';
+        control('description').value = await aiComplete({ field: 'description', existing: control('description').value, projectName, context });
+        aiStatus.textContent = 'Drafting why it was built…';
+        control('why').value = await aiComplete({ field: 'why', existing: control('why').value, projectName, context });
+        aiStatus.textContent = `Drafted from ${describeLastEvidence()} — edit anything before creating.`;
+      } catch (error) {
+        aiStatus.textContent = (error as Error).message || 'The draft failed.';
+      } finally {
+        aiButton.disabled = false;
+      }
+    });
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
