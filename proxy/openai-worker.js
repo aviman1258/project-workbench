@@ -5,7 +5,7 @@
 // The worker holds no secrets — the API key arrives per-request from the browser
 // and is only forwarded to api.openai.com.
 
-const ALLOWED_ORIGIN = 'https://aviman1258.github.io';
+const ALLOWED_ORIGIN = 'https://www.avisheksportfolio.com';
 
 export default {
   async fetch(request) {

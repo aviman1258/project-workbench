@@ -32,7 +32,6 @@ jobs:
           PRIVATE_REPO_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN }}
       - run: npm run build
         env:
-          DEPLOY_BASE: /project-workbench
           PUBLIC_ONLY: '1'
       - uses: actions/upload-pages-artifact@v3
         with:
