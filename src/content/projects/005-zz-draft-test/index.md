@@ -2,8 +2,8 @@
 id: "005"
 slug: zz-draft-test
 name: ZZ Draft Test
-description: A tiny test app that proves the drafting flow.
-why: I built this to prove the drafting flow works.
+description: A tiny test app, redrafted from the project page.
+why: I built this to prove the detail-page drafting flow works too.
 status: idea
 privacy: public
 startDate: 2026-09-04
