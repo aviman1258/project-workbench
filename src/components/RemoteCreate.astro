@@ -50,6 +50,7 @@ const today = new Date().toISOString().slice(0, 10);
   import { stringify } from 'yaml';
   import { clearToken, encodeText, getStoredToken, listProjectFolders, putFile, TOKEN_EVENT } from '../lib/github-client';
   import { draftFromRepository } from '../lib/ai/repo-draft';
+  import { startDraftProgress } from '../lib/ai/draft-progress';
 
   const root = document.querySelector<HTMLElement>('[data-remote-create]');
   if (root) {
@@ -88,6 +89,7 @@ const today = new Date().toISOString().slice(0, 10);
       if (!looksLikeRepo()) return;
       aiButton.disabled = true;
       pendingArtifacts = [];
+      const progress = startDraftProgress();
       try {
         const nameInput = control('name');
         if (!nameInput.value.trim()) {
@@ -98,16 +100,19 @@ const today = new Date().toISOString().slice(0, 10);
           existingDescription: control('description').value,
           existingWhy: control('why').value,
           existingArtifacts: [],
-          status: (message) => { aiStatus.textContent = message; },
+          status: progress.status,
           applyText: async ({ description, why }) => {
             control('description').value = description;
             control('why').value = why;
           },
           addArtifact: async (filename, base64) => { pendingArtifacts.push({ filename, base64 }); },
         });
-        aiStatus.textContent = `Drafted. ${result.artifactNames.length ? `${result.artifactNames.length} generated artifacts are attached when you create the project. ` : ''}Edit anything before creating.`;
+        const summary = `Drafted. ${result.artifactNames.length ? `${result.artifactNames.length} generated artifacts are attached when you create the project. ` : ''}Edit anything before creating.`;
+        progress.done(summary);
+        aiStatus.textContent = summary;
       } catch (error) {
         pendingArtifacts = [];
+        progress.fail((error as Error).message || 'The draft failed.');
         aiStatus.textContent = (error as Error).message || 'The draft failed.';
       } finally {
         syncAiButton();

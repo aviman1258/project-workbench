@@ -5,8 +5,7 @@
 // project pages commit). The images are AI reconstructions of the interface,
 // not screenshots of the running app.
 
-import { z } from 'astro/zod';
-import { completeStructured } from './provider';
+import { completeRaw } from './provider';
 import { collectUiEvidence, serializeContext, type EvidenceSource } from './evidence';
 import { aiComplete, collectProjectEvidence } from '../ai-complete';
 
@@ -27,31 +26,68 @@ export interface DraftResult {
   artifactNames: string[];
 }
 
-const uiPageSchema = z.object({
-  name: z.string(),
-  purpose: z.string(),
-  controls: z.array(z.string()).default([]),
-  html: z.string(),
-});
+interface UiPage {
+  name: string;
+  purpose: string;
+  controls: string[];
+  html: string;
+}
 
-const uiStudySchema = z.object({
-  appName: z.string(),
-  overview: z.string(),
-  pages: z.array(uiPageSchema).min(1).max(6),
-});
-type UiStudy = z.infer<typeof uiStudySchema>;
+interface UiStudy {
+  appName: string;
+  overview: string;
+  pages: UiPage[];
+}
 
+// The reply carries whole HTML documents, so it is a delimited text format —
+// never JSON, where one unescaped newline inside a string kills the parse.
 const UI_SYSTEM = `You are a UI reconstructor. From a web project's HTML/CSS/JS/component source files, reconstruct what the application's screens look like and how they behave.
 
-For each distinct page or screen (up to 6, most important first) produce:
-- "name" and one-sentence "purpose"
-- "controls": what each interactive control does, deduced from the scripts/handlers (e.g. "Status dropdown — filters the list client-side")
-- "html": a single self-contained mockup of the page. Rules for the html:
-  * one <style> block with all CSS inlined — copy the real colors, fonts, spacing, and layout from the CSS evidence as faithfully as possible
-  * absolutely no external resources: no <script>, no <img src=http…>, no @import, no url(...) — represent images as styled placeholder divs labeled with text
-  * design for a 1280×800 viewport; fill it with representative example content so the page looks alive
+Reply EXACTLY in this format (no other commentary, no markdown fences):
 
-Also write "overview": two or three plain-English paragraphs explaining what the app is and how someone uses it.`;
+APPNAME: <the application's name>
+OVERVIEW:
+<two or three plain-English paragraphs explaining what the app is and how someone uses it>
+=== PAGE: <page name>
+PURPOSE: <one sentence>
+CONTROLS:
+- <control — what it does, deduced from the scripts/handlers>
+- <one line per control>
+HTML:
+<the mockup markup, as many lines as needed>
+=== END PAGE
+
+Repeat the PAGE block for each distinct screen — at most 4, most important first.
+
+Rules for each HTML mockup:
+- a single self-contained document: one <style> block with all CSS inlined — copy the real colors, fonts, spacing, and layout from the CSS evidence as faithfully as possible
+- absolutely no external resources: no <script>, no <img src="http…">, no @import, no url(...) — represent images as styled placeholder divs labeled with text
+- design for a 1280×800 viewport and fill it with representative example content so the page looks alive
+- keep each mockup under 90 lines`;
+
+/** Tolerant parser for the delimited UI-study format. */
+export function parseUiStudy(text: string, truncated: boolean): UiStudy {
+  const appName = /^APPNAME:\s*(.+)$/m.exec(text)?.[1]?.trim() ?? 'this app';
+  const overviewMatch = /OVERVIEW:\s*\n([\s\S]*?)(?=\n=== PAGE:|$)/.exec(text);
+  const overview = overviewMatch?.[1]?.trim() ?? '';
+
+  const pages: UiPage[] = [];
+  const blocks = text.split(/^=== PAGE:/m).slice(1);
+  for (const block of blocks) {
+    const name = block.split('\n')[0]?.trim() || `Page ${pages.length + 1}`;
+    const purpose = /PURPOSE:\s*(.+)/.exec(block)?.[1]?.trim() ?? '';
+    const controls = (/CONTROLS:\s*\n([\s\S]*?)\nHTML:/.exec(block)?.[1] ?? '')
+      .split('\n')
+      .map((line) => line.replace(/^\s*-\s*/, '').trim())
+      .filter(Boolean);
+    const html = (/HTML:\s*\n([\s\S]*?)(?:\n=== END PAGE|$)/.exec(block)?.[1] ?? '').trim();
+    const complete = /=== END PAGE/.test(block);
+    // a reply cut off mid-page keeps its finished pages and drops the ragged one
+    if (html && (complete || !truncated)) pages.push({ name, purpose, controls, html });
+  }
+  if (!pages.length) throw new Error('The AI could not reconstruct any UI pages from this repository.');
+  return { appName, overview, pages };
+}
 
 // --- rasterize a self-contained HTML mockup to PNG via SVG foreignObject ---
 async function htmlToPngBase64(html: string, width = 1280, height = 800): Promise<string> {
@@ -148,12 +184,13 @@ export async function draftFromRepository(
   const uiSources: EvidenceSource[] = await collectUiEvidence(token, repositoryUrl);
   if (uiSources.length) {
     target.status('Reconstructing the UI pages…');
-    const study = await completeStructured({
-      system: UI_SYSTEM,
-      user: `Project: ${target.projectName}\n\nSource files:\n${uiSources.map((s) => `## ${s.ref}\n${s.text}`).join('\n\n')}\n\nReturn JSON: {"appName": string, "overview": string, "pages": [{"name": string, "purpose": string, "controls": [string], "html": string}]}`,
-      schema: uiStudySchema,
-      maxTokens: 8000,
-    });
+    const reply = await completeRaw(
+      UI_SYSTEM,
+      `Project: ${target.projectName}\n\nSource files:\n${uiSources.map((s) => `## ${s.ref}\n${s.text}`).join('\n\n')}`,
+      'fast',
+      16_000,
+    );
+    const study = parseUiStudy(reply.text, reply.truncated);
 
     const taken = new Set(target.existingArtifacts);
     const images: { name: string; purpose: string; controls: string[]; base64: string }[] = [];

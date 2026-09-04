@@ -73,6 +73,7 @@ const { id } = Astro.props;
   import { openFieldEditor } from '../lib/field-editor';
   import { aiComplete, describeLastEvidence, gatherRepoContext } from '../lib/ai-complete';
   import { draftFromRepository } from '../lib/ai/repo-draft';
+  import { startDraftProgress } from '../lib/ai/draft-progress';
 
   const root = document.querySelector<HTMLElement>('[data-private-vault]');
   if (root) {
@@ -398,7 +399,9 @@ const { id } = Astro.props;
     draftDialog.querySelector('[data-vault-draft-cancel]')?.addEventListener('click', () => draftDialog.close());
     draftDialog.addEventListener('click', (event) => { if (event.target === draftDialog) draftDialog.close(); });
     draftConfirm.addEventListener('click', async () => {
-      draftConfirm.disabled = true;
+      // the dialog's job is done — the floating researcher takes it from here
+      draftDialog.close();
+      const progress = startDraftProgress();
       const existingArtifacts = [...document.querySelectorAll<HTMLElement>('[data-vault-carousel] [data-media-delete-trigger]')]
         .map((t) => t.dataset.filename ?? '').filter(Boolean);
       try {
@@ -413,7 +416,7 @@ const { id } = Astro.props;
             existingDescription: heroDescription,
             existingWhy: whyEl.textContent ?? '',
             existingArtifacts,
-            status: (message) => { draftStatus.textContent = message; },
+            status: progress.status,
             applyText: async ({ description, why }) => {
               await patchVaultMeta((metadata) => {
                 metadata.description = description;
@@ -429,7 +432,7 @@ const { id } = Astro.props;
           },
         );
         if (result.artifactNames.length) {
-          draftStatus.textContent = 'Recording the artifact order…';
+          progress.status('Recording the artifact order…');
           await patchVaultMeta((metadata) => {
             const order = Array.isArray(metadata.artifactOrder) ? (metadata.artifactOrder as string[]) : existingArtifacts;
             metadata.artifactOrder = [...order, ...result.artifactNames.filter((name) => !order.includes(name))];
@@ -437,13 +440,12 @@ const { id } = Astro.props;
               metadata.featuredArtifact = result.artifactNames.find((name) => name.endsWith('.png')) ?? result.artifactNames[0];
             }
           }, 'Add generated artifacts to the order');
-          draftStatus.textContent = 'Refreshing the carousel…';
+          progress.status('Refreshing the carousel…');
           await loadMediaSettled(lastMediaCount + result.artifactNames.length);
         }
-        draftStatus.textContent = `Done — text updated${result.artifactNames.length ? ` and ${result.artifactNames.length} artifacts attached` : ''}.`;
+        progress.done(`Done — text updated${result.artifactNames.length ? ` and ${result.artifactNames.length} artifacts attached` : ''}.`);
       } catch (error) {
-        draftStatus.textContent = (error as Error).message || 'The draft failed.';
-        draftConfirm.disabled = false;
+        progress.fail((error as Error).message || 'The draft failed.');
       }
     });
 

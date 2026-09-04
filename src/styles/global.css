@@ -2111,6 +2111,121 @@ body:not([data-github-connected='true']) .project-delete-pill,
   display: none;
 }
 
+/* the "researcher" progress companion: a magnifying glass sweeping a document */
+.draft-progress {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(92vw, 480px);
+  padding: 12px 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: rgb(240 237 226 / 96%);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-md);
+}
+
+.draft-progress__scene {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 42px;
+}
+
+.draft-progress__doc {
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid var(--ink-soft);
+  border-radius: 4px;
+  background:
+    repeating-linear-gradient(to bottom, var(--line-strong) 0 1.5px, transparent 1.5px 7px)
+    6px 8px / 22px 26px no-repeat,
+    var(--surface-strong);
+}
+
+.draft-progress__lens {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  width: 15px;
+  height: 15px;
+  border: 2.5px solid var(--forest);
+  border-radius: 50%;
+  background: rgb(207 220 207 / 45%);
+  animation: draft-lens-sweep 2.6s ease-in-out infinite;
+}
+
+.draft-progress__lens::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  bottom: -6px;
+  width: 3px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--forest);
+  transform: rotate(-45deg);
+}
+
+@keyframes draft-lens-sweep {
+  0% { transform: translate(1px, 2px); }
+  25% { transform: translate(14px, 8px); }
+  50% { transform: translate(3px, 16px); }
+  75% { transform: translate(15px, 22px); }
+  100% { transform: translate(1px, 2px); }
+}
+
+.draft-progress__text {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.draft-progress__close {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.draft-progress[data-state='done'] .draft-progress__lens {
+  animation: none;
+  border-color: var(--forest);
+}
+
+.draft-progress[data-state='done'] .draft-progress__scene::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  color: var(--forest);
+  background: var(--surface-strong);
+  border-radius: 4px;
+}
+
+.draft-progress[data-state='failed'] .draft-progress__lens {
+  animation: none;
+}
+
+.draft-progress[data-state='failed'] {
+  border-color: var(--red);
+}
+
+.draft-progress[data-state='failed'] .draft-progress__text {
+  color: var(--red);
+}
+
 .inline-editable > .inline-edit {
   position: absolute;
   top: -10px;

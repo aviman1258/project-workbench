@@ -15,7 +15,14 @@ const MODELS: Record<'anthropic' | 'openai', Record<ModelTier, string>> = {
   openai: { fast: 'gpt-4o-mini', strong: 'gpt-4o' },
 };
 
-async function completeText(system: string, user: string, tier: ModelTier, maxTokens: number): Promise<string> {
+export interface RawCompletion {
+  text: string;
+  /** the reply was cut off at the output-token limit */
+  truncated: boolean;
+}
+
+/** Plain text completion; callers that expect long output should check `truncated`. */
+export async function completeRaw(system: string, user: string, tier: ModelTier, maxTokens: number): Promise<RawCompletion> {
   const apiKey = getStoredAnthropicKey();
   if (!apiKey) throw new Error('Add an Anthropic or OpenAI API key first — connections icon in the header.');
 
@@ -30,11 +37,12 @@ async function completeText(system: string, user: string, tier: ModelTier, maxTo
         messages: [{ role: 'user', content: user }],
       });
       if (response.stop_reason === 'refusal') throw new Error('The request was declined.');
-      return response.content
+      const text = response.content
         .filter((block): block is Extract<typeof block, { type: 'text' }> => block.type === 'text')
         .map((block) => block.text)
         .join('')
         .trim();
+      return { text, truncated: response.stop_reason === 'max_tokens' };
     } catch (error) {
       if (error instanceof Anthropic.AuthenticationError) {
         throw new Error('That Anthropic API key was rejected — replace it via the connections icon in the header.');
@@ -60,7 +68,14 @@ async function completeText(system: string, user: string, tier: ModelTier, maxTo
       { role: 'user', content: user },
     ],
   });
-  return (response.choices?.[0]?.message?.content ?? '').trim();
+  return {
+    text: (response.choices?.[0]?.message?.content ?? '').trim(),
+    truncated: response.choices?.[0]?.finish_reason === 'length',
+  };
+}
+
+async function completeText(system: string, user: string, tier: ModelTier, maxTokens: number): Promise<string> {
+  return (await completeRaw(system, user, tier, maxTokens)).text;
 }
 
 /** Pull the JSON object out of a reply that may be fenced or wrapped in prose. */
