@@ -165,7 +165,7 @@ export async function aiComplete(options: {
 
   const instruction = field === 'description'
     ? 'Write a 1-3 sentence description of what this project does. Concrete and plain-English; no marketing fluff.'
-    : 'Write 2-4 sentences on WHY this project was built — the problem, curiosity, or need behind it. First person ("I built this…"). If the current draft below contains intent, treat it as the strongest signal and refine it using the repository evidence.';
+    : 'Write 2-4 sentences in first person ("I built this…") on WHY this project was built — the problem, curiosity, or need behind it. The author is Avishek Chandra, a site reliability engineer who builds side projects to explore ideas end to end. Ground the reasoning in the repository evidence, but you may draw on general knowledge of developers and the world to make the motivation plausible and human. If the current draft below contains intent, treat it as the strongest signal and refine it.';
 
   const userPrompt = `Project: ${projectName}\n\nCurrent draft (may be empty):\n${existing.slice(0, 3_000)}\n\n${instruction}\n\nEvidence:\n${context.slice(0, MAX_CONTEXT_CHARS)}`;
 

@@ -18,11 +18,31 @@ const { folder } = Astro.props;
   <input type="file" multiple data-remote-media-input />
 </div>
 
+<button type="button" class="repo-draft-pill" data-repo-draft hidden>
+  <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M12 2l1.9 5.7L19.6 9l-5.7 1.9L12 16.6l-1.9-5.7L4.4 9l5.7-1.3L12 2Zm7 12 1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3Z"/></svg>
+  Draft from repo
+</button>
+
+<dialog class="media-delete-dialog" data-repo-draft-dialog>
+  <h3>Draft from the repository?</h3>
+  <p>
+    The AI rewrites the <strong>description</strong> and <strong>why</strong> (using what's there as signal),
+    generates UI mockup images from the repository's code, builds a how-it-works PDF, and attaches them
+    as artifacts — all committed automatically.
+  </p>
+  <p class="share-dialog__url" data-repo-draft-status></p>
+  <div class="media-delete-dialog__actions">
+    <button type="button" class="media-delete-dialog__cancel" data-repo-draft-cancel>Cancel</button>
+    <button type="button" class="share-dialog__native" data-repo-draft-confirm>Draft it</button>
+  </div>
+</dialog>
+
 <script>
   import { parse, stringify } from 'yaml';
   import { TOKEN_EVENT, encodeText, getFile, getStoredToken, putFile, deleteFile } from '../lib/github-client';
   import { openFieldEditor } from '../lib/field-editor';
   import { aiComplete, describeLastEvidence, gatherRepoContext } from '../lib/ai-complete';
+  import { draftFromRepository } from '../lib/ai/repo-draft';
 
   const root = document.querySelector<HTMLElement>('[data-remote-editor]');
   if (root) {
@@ -121,6 +141,67 @@ const { folder } = Astro.props;
         if (field === 'name') document.title = `${value} · Avishek's Portfolio`;
       }
     };
+
+    // --- fixed "Draft from repo" pill: one confirm, then everything applies ---
+    const draftPill = document.querySelector<HTMLButtonElement>('[data-repo-draft]');
+    const draftDialog = document.querySelector<HTMLDialogElement>('[data-repo-draft-dialog]');
+    if (draftPill && draftDialog) {
+      const draftStatus = draftDialog.querySelector<HTMLElement>('[data-repo-draft-status]')!;
+      const confirmButton = draftDialog.querySelector<HTMLButtonElement>('[data-repo-draft-confirm]')!;
+      const syncPill = () => { draftPill.hidden = !(getStoredToken() && currentValue('repositoryUrl')); };
+      syncPill();
+      window.addEventListener(TOKEN_EVENT, syncPill);
+
+      draftPill.addEventListener('click', () => {
+        if (!requireToken()) return;
+        draftStatus.textContent = '';
+        confirmButton.disabled = false;
+        draftDialog.showModal();
+      });
+      draftDialog.querySelector('[data-repo-draft-cancel]')?.addEventListener('click', () => draftDialog.close());
+      draftDialog.addEventListener('click', (event) => { if (event.target === draftDialog) draftDialog.close(); });
+
+      confirmButton.addEventListener('click', async () => {
+        confirmButton.disabled = true;
+        const existingArtifacts = [...document.querySelectorAll<HTMLElement>('[data-media-delete-trigger]')]
+          .map((t) => t.dataset.filename ?? '').filter(Boolean);
+        try {
+          const result = await draftFromRepository(token, currentValue('repositoryUrl'), currentValue('pullRequestUrl'), {
+            projectName: currentValue('name'),
+            existingDescription: currentValue('description'),
+            existingWhy: currentValue('why'),
+            existingArtifacts,
+            status: (message) => { draftStatus.textContent = message; },
+            applyText: async ({ description, why }) => {
+              await patchFrontmatter((metadata) => {
+                metadata.description = description;
+                metadata.why = why;
+              }, 'Draft description and why from the repository');
+              applyDisplay('description', description);
+              applyDisplay('why', why);
+            },
+            addArtifact: async (filename, base64) => {
+              await putFile(token, `src/content/projects/${folder}/artifacts/${filename}`, base64, `Add generated artifact ${filename}`);
+            },
+          });
+          if (result.artifactNames.length) {
+            draftStatus.textContent = 'Recording the artifact order…';
+            await patchFrontmatter((metadata) => {
+              const order = Array.isArray(metadata.artifactOrder) ? (metadata.artifactOrder as string[]) : existingArtifacts;
+              metadata.artifactOrder = [...order, ...result.artifactNames.filter((name) => !order.includes(name))];
+              if (!metadata.featuredArtifact && !existingArtifacts.length) {
+                metadata.featuredArtifact = result.artifactNames.find((name) => name.endsWith('.png')) ?? result.artifactNames[0];
+              }
+            }, 'Add generated artifacts to the order');
+          }
+          draftStatus.textContent = `Done — text updated${result.artifactNames.length ? `, ${result.artifactNames.length} artifacts committed. They appear in the carousel after the site rebuilds (~1 min)` : ''}.`;
+        } catch (error) {
+          handleAuthFailure(error);
+          draftStatus.textContent = (error as Error).message || 'The draft failed.';
+          confirmButton.disabled = false;
+        }
+      });
+    }
 
     document.querySelectorAll<HTMLButtonElement>('[data-inline-edit]').forEach((pencil) => {
       pencil.addEventListener('click', () => {

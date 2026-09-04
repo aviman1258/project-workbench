@@ -42,6 +42,7 @@ for (const folder of folders) {
   const startDate = pick('startDate');
   const updatedDate = pick('updatedDate') || startDate;
   if (!id || !startDate) { console.warn(`[private-stubs] ${folder} missing id/startDate, skipping`); continue; }
+  if (pick('deleted') === 'true') { console.log(`[private-stubs] ${folder} is soft-deleted, skipping`); continue; }
 
   const stubDir = path.resolve(`src/content/projects/${id}-private-stub`);
   await mkdir(path.join(stubDir, 'artifacts'), { recursive: true });

@@ -246,6 +246,58 @@ export function serializeContext(context: RepositoryContext): string {
   return context.sources.map((s) => `## ${s.kind}: ${s.ref}\n${s.text}`).join('\n\n');
 }
 
+// --- UI evidence: the front-end files a mockup can be reconstructed from ---
+
+const UI_BUDGET = 36_000;
+const UI_FILE_CAP = 4_000;
+
+// how likely a path is to describe what the UI looks like / does
+function uiScore(p: string): number {
+  if (/(^|\/)(node_modules|dist|build|coverage|\.git)\//.test(p) || /\.min\.|\.map$/.test(p)) return -1;
+  const name = p.toLowerCase();
+  let score = 0;
+  if (/\.(html|astro|vue|svelte)$/.test(name)) score += 5;
+  if (/\.(jsx|tsx)$/.test(name)) score += 4;
+  if (/\.css$/.test(name)) score += 4;
+  if (/\.(js|ts)$/.test(name)) score += 1;
+  if (!/\.(html|astro|vue|svelte|jsx|tsx|css|js|ts)$/.test(name)) return -1;
+  if (/(^|\/)(index|app|main|home|dashboard|layout)\./.test(name)) score += 3;
+  if (/(^|\/)(pages|views|screens|components|layouts)\//.test(name)) score += 2;
+  if (/(^|\/)(styles?|css)\//.test(name) || /(global|main|style)\.css$/.test(name)) score += 2;
+  if (/\.(test|spec)\./.test(name) || /(^|\/)(tests?|__tests__)\//.test(name)) return -1;
+  return score;
+}
+
+/** Fetch the most UI-describing files of a repository (for mockup reconstruction). */
+export async function collectUiEvidence(token: string, repositoryUrl: string): Promise<EvidenceSource[]> {
+  const repo = parseGitHubRepo(repositoryUrl);
+  if (!repo) return [];
+  let paths: string[] = [];
+  try {
+    const tree = await ghJson(token, `https://api.github.com/repos/${repo.owner}/${repo.repo}/git/trees/HEAD?recursive=1`);
+    paths = ((tree.tree ?? []) as any[]).filter((e) => e.type === 'blob').map((e) => String(e.path));
+  } catch {
+    return [];
+  }
+  const ranked = paths
+    .map((p) => ({ p, score: uiScore(p) }))
+    .filter((e) => e.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 12);
+
+  const sources: EvidenceSource[] = [];
+  let budget = UI_BUDGET;
+  for (const { p } of ranked) {
+    if (budget <= 0) break;
+    const content = await ghRaw(token, `https://api.github.com/repos/${repo.owner}/${repo.repo}/contents/${p.split('/').map(encodeURIComponent).join('/')}`).catch(() => null);
+    if (!content) continue;
+    const { text, truncated } = cap(redact(content), Math.min(UI_FILE_CAP, budget));
+    sources.push({ id: `file:${p}`, kind: 'file', ref: p, text, truncated });
+    budget -= text.length;
+  }
+  return sources;
+}
+
 /** One line for the UI: what the last draft was grounded in. */
 export function describeContext(context: RepositoryContext): string {
   const kinds = [...new Set(context.sources.map((s) => s.kind))];

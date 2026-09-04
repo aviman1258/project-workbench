@@ -1,0 +1,95 @@
+---
+// Soft delete for the hosted site: a fixed bottom-right control (visible while
+// GitHub is connected) that marks the project `deleted: true` in front matter.
+// The record and its artifacts stay in git — the site just stops rendering it.
+// Private projects patch both the vault record and the public stub so the next
+// rebuild drops the locked card too.
+import { withBase } from '../lib/projects';
+
+interface Props {
+  folder: string;
+  id: string;
+  isPrivate: boolean;
+  projectName: string;
+}
+
+const { folder, id, isPrivate, projectName } = Astro.props;
+---
+
+<button
+  type="button"
+  class="project-delete-pill"
+  data-project-delete
+  data-folder={folder}
+  data-project-id={id}
+  data-private={String(isPrivate)}
+  data-home={withBase('/')}
+  aria-label={`Delete ${projectName}`}
+  title="Delete this project"
+>
+  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+</button>
+
+<dialog class="media-delete-dialog" data-project-delete-dialog>
+  <h3>Delete this project?</h3>
+  <p>
+    <strong>{projectName}</strong> disappears from the site after the next rebuild.
+    This is a soft delete — the record stays in git history and can be restored by hand.
+  </p>
+  <p class="share-dialog__url" data-project-delete-status></p>
+  <div class="media-delete-dialog__actions">
+    <button type="button" class="media-delete-dialog__cancel" data-project-delete-cancel>Cancel</button>
+    <button type="button" class="media-delete-dialog__confirm" data-project-delete-confirm>Delete project</button>
+  </div>
+</dialog>
+
+<script>
+  import { parse, stringify } from 'yaml';
+  import { encodeText, findVaultFolder, getFile, getStoredToken, getVaultFile, putFile, putVaultFile } from '../lib/github-client';
+
+  const trigger = document.querySelector<HTMLButtonElement>('[data-project-delete]');
+  const dialog = document.querySelector<HTMLDialogElement>('[data-project-delete-dialog]');
+  if (trigger && dialog) {
+    const status = dialog.querySelector<HTMLElement>('[data-project-delete-status]')!;
+    const confirmButton = dialog.querySelector<HTMLButtonElement>('[data-project-delete-confirm]')!;
+    const { folder, projectId, home } = trigger.dataset;
+    const isPrivate = trigger.dataset.private === 'true';
+
+    const markDeleted = (text: string) => {
+      const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
+      if (!match) throw new Error('index.md is missing YAML front matter.');
+      const metadata = { ...(parse(match[1]) as Record<string, unknown>), deleted: true, updatedDate: new Date().toISOString().slice(0, 10) };
+      const body = text.slice(match[0].length).replace(/^\r?\n/, '');
+      return `---\n${stringify(metadata, { lineWidth: 0 }).trimEnd()}\n---\n${body ? `\n${body}` : ''}`;
+    };
+
+    trigger.addEventListener('click', () => { status.textContent = ''; dialog.showModal(); });
+    dialog.querySelector('[data-project-delete-cancel]')?.addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
+
+    confirmButton.addEventListener('click', async () => {
+      const token = getStoredToken();
+      if (!token) { status.textContent = 'Connect GitHub with the connections icon in the header first.'; return; }
+      confirmButton.disabled = true;
+      status.textContent = 'Marking the project deleted…';
+      try {
+        if (isPrivate) {
+          const vaultFolder = await findVaultFolder(token, projectId ?? '');
+          if (vaultFolder) {
+            const vaultPath = `projects/${vaultFolder}/index.md`;
+            const vaultFile = await getVaultFile(token, vaultPath);
+            await putVaultFile(token, vaultPath, encodeText(markDeleted(vaultFile.text)), 'Soft-delete the project', vaultFile.sha);
+          }
+        }
+        const indexPath = `src/content/projects/${folder}/index.md`;
+        const file = await getFile(token, indexPath);
+        await putFile(token, indexPath, encodeText(markDeleted(file.text)), 'Soft-delete the project', file.sha);
+        status.textContent = 'Deleted. The site rebuilds in about a minute — heading home…';
+        setTimeout(() => { window.location.href = home ?? '/'; }, 1800);
+      } catch (error) {
+        status.textContent = (error as Error).message || 'The delete failed.';
+        confirmButton.disabled = false;
+      }
+    });
+  }
+</script>

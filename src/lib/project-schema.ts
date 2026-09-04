@@ -17,6 +17,8 @@ export const projectMetadataSchema = z.object({
   featuredArtifact: z.string().min(1).optional(),
   repositoryUrl: z.string().url().optional(),
   pullRequestUrl: z.string().url().optional(),
+  // soft delete: the record stays in git, the site stops rendering it
+  deleted: z.boolean().optional(),
 });
 
 const dateInput = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');

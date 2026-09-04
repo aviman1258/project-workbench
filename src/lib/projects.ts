@@ -8,8 +8,9 @@ const projectsRoot = path.resolve('src/content/projects');
 // projects from every page, path, and artifact endpoint. Local dev shows everything.
 export const publicOnlyBuild = process.env.PUBLIC_ONLY === '1';
 
-export function listedProjects<T extends { data: { privacy: string } }>(projects: T[]): T[] {
-  return publicOnlyBuild ? projects.filter((project) => project.data.privacy === 'public') : projects;
+export function listedProjects<T extends { data: { privacy: string; deleted?: boolean } }>(projects: T[]): T[] {
+  const alive = projects.filter((project) => !project.data.deleted);
+  return publicOnlyBuild ? alive.filter((project) => project.data.privacy === 'public') : alive;
 }
 
 // Prefix an internal absolute path with the configured base (GitHub Pages serves

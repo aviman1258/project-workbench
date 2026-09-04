@@ -5,12 +5,12 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import { featuredArtifact, formatDate, formatLabel, getProjectFolder, loadArtifacts, publicOnlyBuild, withBase } from '../../lib/projects';
 import RemoteEditor from '../../components/RemoteEditor.astro';
 import PrivateVault from '../../components/PrivateVault.astro';
-import ChangeAnalysis from '../../components/ChangeAnalysis.astro';
+import ProjectDelete from '../../components/ProjectDelete.astro';
 import { privacyLevels, projectStatuses } from '../../lib/project-schema';
 
 export async function getStaticPaths() {
   // Private projects build too: in public deploys they are generated locked stubs.
-  const projects = await getCollection('projects');
+  const projects = (await getCollection('projects')).filter((project) => !project.data.deleted);
   return projects.map((project) => ({ params: { slug: project.data.slug }, props: { project } }));
 }
 
@@ -243,7 +243,7 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
     </section>
     )}
 
-    {publicOnlyBuild && <ChangeAnalysis />}
+    {publicOnlyBuild && <ProjectDelete folder={projectFolder} id={data.id} isPrivate={privateProject} projectName={data.name} />}
   </div>
 </BaseLayout>
 

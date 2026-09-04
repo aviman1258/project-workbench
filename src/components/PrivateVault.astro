@@ -37,6 +37,25 @@ const { id } = Astro.props;
     </section>
   </article>
 
+  <button type="button" class="repo-draft-pill" data-vault-repo-draft hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M12 2l1.9 5.7L19.6 9l-5.7 1.9L12 16.6l-1.9-5.7L4.4 9l5.7-1.3L12 2Zm7 12 1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3Z"/></svg>
+    Draft from repo
+  </button>
+
+  <dialog class="media-delete-dialog" data-vault-draft-dialog>
+    <h3>Draft from the repository?</h3>
+    <p>
+      The AI rewrites the <strong>description</strong> and <strong>why</strong> (using what's there as signal),
+      generates UI mockup images from the repository's code, builds a how-it-works PDF, and attaches them
+      as artifacts — all committed to the private vault automatically.
+    </p>
+    <p class="share-dialog__url" data-vault-draft-status></p>
+    <div class="media-delete-dialog__actions">
+      <button type="button" class="media-delete-dialog__cancel" data-vault-draft-cancel>Cancel</button>
+      <button type="button" class="share-dialog__native" data-vault-draft-confirm>Draft it</button>
+    </div>
+  </dialog>
+
   <dialog class="media-delete-dialog" data-vault-delete-dialog>
     <h3>Delete this artifact?</h3>
     <p><strong data-vault-delete-name></strong> will be removed from the private vault. This cannot be undone.</p>
@@ -53,6 +72,7 @@ const { id } = Astro.props;
   import { artifactKind, carouselHtml, renderPdfPreviews, wireCarousel, type CarouselArtifact } from '../lib/artifact-carousel';
   import { openFieldEditor } from '../lib/field-editor';
   import { aiComplete, describeLastEvidence, gatherRepoContext } from '../lib/ai-complete';
+  import { draftFromRepository } from '../lib/ai/repo-draft';
 
   const root = document.querySelector<HTMLElement>('[data-private-vault]');
   if (root) {
@@ -366,8 +386,70 @@ const { id } = Astro.props;
       }
     }
 
+    // --- fixed "Draft from repo" pill: one confirm, then everything applies ---
+    const draftPill = root.querySelector<HTMLButtonElement>('[data-vault-repo-draft]')!;
+    const draftDialog = root.querySelector<HTMLDialogElement>('[data-vault-draft-dialog]')!;
+    const draftStatus = draftDialog.querySelector<HTMLElement>('[data-vault-draft-status]')!;
+    const draftConfirm = draftDialog.querySelector<HTMLButtonElement>('[data-vault-draft-confirm]')!;
+    const fieldDisplay = (field: string) => document.querySelector<HTMLElement>(`[data-field-display="${field}"]`);
+    const syncDraftPill = () => { draftPill.hidden = !(loaded && fieldDisplay('repositoryUrl')?.dataset.value); };
+
+    draftPill.addEventListener('click', () => { draftStatus.textContent = ''; draftConfirm.disabled = false; draftDialog.showModal(); });
+    draftDialog.querySelector('[data-vault-draft-cancel]')?.addEventListener('click', () => draftDialog.close());
+    draftDialog.addEventListener('click', (event) => { if (event.target === draftDialog) draftDialog.close(); });
+    draftConfirm.addEventListener('click', async () => {
+      draftConfirm.disabled = true;
+      const existingArtifacts = [...document.querySelectorAll<HTMLElement>('[data-vault-carousel] [data-media-delete-trigger]')]
+        .map((t) => t.dataset.filename ?? '').filter(Boolean);
+      try {
+        const heroTitle = document.querySelector('.project-hero__main h1')?.textContent?.trim() ?? '';
+        const heroDescription = document.querySelector('.project-hero__main p')?.textContent?.trim() ?? '';
+        const result = await draftFromRepository(
+          vaultToken,
+          fieldDisplay('repositoryUrl')?.dataset.value ?? '',
+          fieldDisplay('pullRequestUrl')?.dataset.value ?? '',
+          {
+            projectName: heroTitle,
+            existingDescription: heroDescription,
+            existingWhy: whyEl.textContent ?? '',
+            existingArtifacts,
+            status: (message) => { draftStatus.textContent = message; },
+            applyText: async ({ description, why }) => {
+              await patchVaultMeta((metadata) => {
+                metadata.description = description;
+                metadata.why = why;
+              }, 'Draft description and why from the repository');
+              const heroP = document.querySelector('.project-hero__main p');
+              if (heroP) heroP.textContent = description;
+              whyEl.textContent = why;
+            },
+            addArtifact: async (filename, base64) => {
+              await putVaultFile(vaultToken, `projects/${vaultFolder}/artifacts/${filename}`, base64, `Add generated artifact ${filename}`);
+            },
+          },
+        );
+        if (result.artifactNames.length) {
+          draftStatus.textContent = 'Recording the artifact order…';
+          await patchVaultMeta((metadata) => {
+            const order = Array.isArray(metadata.artifactOrder) ? (metadata.artifactOrder as string[]) : existingArtifacts;
+            metadata.artifactOrder = [...order, ...result.artifactNames.filter((name) => !order.includes(name))];
+            if (!metadata.featuredArtifact && !existingArtifacts.length) {
+              metadata.featuredArtifact = result.artifactNames.find((name) => name.endsWith('.png')) ?? result.artifactNames[0];
+            }
+          }, 'Add generated artifacts to the order');
+          draftStatus.textContent = 'Refreshing the carousel…';
+          await loadMediaSettled(lastMediaCount + result.artifactNames.length);
+        }
+        draftStatus.textContent = `Done — text updated${result.artifactNames.length ? ` and ${result.artifactNames.length} artifacts attached` : ''}.`;
+      } catch (error) {
+        draftStatus.textContent = (error as Error).message || 'The draft failed.';
+        draftConfirm.disabled = false;
+      }
+    });
+
     // unlock straight from the header connection — no separate panel here
-    void unlock(getStoredToken());
-    window.addEventListener(TOKEN_EVENT, () => void unlock(getStoredToken()));
+    const unlockAndSync = async (token: string) => { await unlock(token); syncDraftPill(); };
+    void unlockAndSync(getStoredToken());
+    window.addEventListener(TOKEN_EVENT, () => void unlockAndSync(getStoredToken()));
   }
 </script>
