@@ -14,7 +14,6 @@ artifactOrder:
   - mypaljson-20260902055709.png
   - mypaljson2-20260902055735.png
   - ui-main-json-api-tester.png
-  - ui-history-modal.png
   - how-my-pal-json-works.pdf
 deleted: true
 ---
