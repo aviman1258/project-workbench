@@ -13,4 +13,5 @@ artifactOrder:
   - ui-dashboard.png
   - how-zz-draft-test-works.pdf
 featuredArtifact: ui-dashboard.png
+deleted: true
 ---
