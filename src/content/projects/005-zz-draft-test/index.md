@@ -9,4 +9,8 @@ privacy: public
 startDate: 2026-09-04
 updatedDate: 2026-09-04
 repositoryUrl: https://github.com/aviman1258/my-pal-json
+artifactOrder:
+  - ui-dashboard.png
+  - how-zz-draft-test-works.pdf
+featuredArtifact: ui-dashboard.png
 ---
