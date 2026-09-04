@@ -10,6 +10,12 @@ startDate: 2024-10-03
 updatedDate: 2026-09-04
 featuredArtifact: mypaljson2-20260902055735.png
 repositoryUrl: https://github.com/aviman1258/my-pal-json
+artifactOrder:
+  - mypaljson-20260902055709.png
+  - mypaljson2-20260902055735.png
+  - ui-main-json-api-tester.png
+  - ui-history-modal.png
+  - how-my-pal-json-works.pdf
 ---
 
 ## Observation
