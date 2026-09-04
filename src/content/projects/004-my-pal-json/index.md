@@ -16,6 +16,7 @@ artifactOrder:
   - ui-main-json-api-tester.png
   - ui-history-modal.png
   - how-my-pal-json-works.pdf
+deleted: true
 ---
 
 ## Observation
