@@ -2,12 +2,12 @@
 id: "003"
 slug: porfolio-workbench
 name: Portfolio Workbench
-description: Portfolio Workbench is a local-first web application for documenting product ideas, experiments, prototypes, and shipped work using Markdown and YAML files stored in Git. It renders a searchable, filterable portfolio site with Astro, validates project metadata at build time, and includes a development-only editor for creating projects and timeline events without a database or external services. All data lives in version-controlled files, making the portfolio durable, inspectable, and portable for future deployment.
-why: Built to keep project documentation and evidence tied to plain files under Git rather than a hosted service, so records stay durable, diffable, and portable, per the README's stated rationale ("Markdown and YAML in Git are the canonical data"). The local-only editor, loopback-request checks, and static build output show a deliberate choice to avoid a database or auth backend for the read path. The AI-fill and device-unlock features suggest the goal was to lower the effort of writing up new projects while still letting some entries stay restricted to the author via passkey rather than a login system.
+description: Portfolio Workbench is a local-first web application that documents product ideas, experiments, prototypes, and shipped work using Markdown and YAML files stored in Git. It renders a searchable, filterable portfolio site with Astro, validates project metadata at build time, and includes a development-only editor for creating projects and timeline events without a database or external services. All data lives in version-controlled files, making the portfolio durable, inspectable, and portable.
+why: I built this to keep my project records in Git—as plain Markdown and YAML files—rather than locked into a hosted service or database. As a site reliability engineer shipping side projects, I wanted a durable, diffable archive I could version-control, inspect by hand, and redeploy without migration pain. The local-only editor and passkey-based privacy controls let me document experiments and ideas end-to-end while staying selective about what's shareable, and the static build output means the portfolio itself stays simple and portable.
 status: dev
 privacy: public
 startDate: 2026-09-01
-updatedDate: 2026-09-02
+updatedDate: 2026-09-04
 artifactOrder:
   - portfolio-workbench-project-index.png
   - portfolio-workbench-project-editor.png
