@@ -12,6 +12,11 @@ artifactOrder:
   - portfolio-workbench-project-index.png
   - portfolio-workbench-project-editor.png
   - portfolio-workbench-add-project.png
+  - ui-portfolio-home-project-index.png
+  - ui-project-detail.png
+  - ui-add-project-local-editor.png
+  - ui-not-found-404.png
+  - how-portfolio-workbench-works.pdf
 featuredArtifact: portfolio-workbench-project-index.png
 repositoryUrl: https://github.com/aviman1258/project-workbench
 ---
