@@ -202,7 +202,7 @@ const CARD = {
     <script>
       import QRCode from 'qrcode';
       import { TOKEN_EVENT, clearToken, getStoredToken, getVaultText, storeToken, validateToken } from '../lib/github-client';
-      import { clearAnthropicKey, clearOpenAiProxy, detectProvider, getStoredAnthropicKey, getStoredOpenAiProxy, storeAnthropicKey, storeOpenAiProxy } from '../lib/ai-complete';
+      import { clearAnthropicKey, clearOpenAiProxy, detectProvider, getStoredAnthropicKey, getStoredOpenAiProxy, storeAnthropicKey, storeOpenAiProxy } from '../lib/ai/keys';
 
       // --- header connections icon + dialog (hosted builds only) ---
       // One input for every credential; the paste's prefix says what it is.

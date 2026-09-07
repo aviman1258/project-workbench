@@ -3,7 +3,7 @@
 // keeps model choice decoupled from callers: this module maps it to a model
 // per provider.
 
-import { detectProvider, getStoredAnthropicKey, getStoredOpenAiProxy } from '../ai-complete';
+import { detectProvider, getStoredAnthropicKey, getStoredOpenAiProxy } from './keys';
 
 export type ModelTier = 'fast' | 'strong';
 
