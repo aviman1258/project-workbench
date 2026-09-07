@@ -7,9 +7,8 @@ why: I built this to keep my project records in Git—as plain Markdown and YAML
 status: dev
 privacy: public
 startDate: 2026-09-01
-updatedDate: 2026-09-04
+updatedDate: 2026-09-07
 artifactOrder:
-  - portfolio-workbench-project-index.png
   - portfolio-workbench-project-editor.png
   - portfolio-workbench-add-project.png
   - ui-portfolio-home-project-index.png
@@ -17,7 +16,7 @@ artifactOrder:
   - ui-add-project-local-editor.png
   - ui-not-found-404.png
   - how-portfolio-workbench-works.pdf
-featuredArtifact: portfolio-workbench-project-index.png
+featuredArtifact: portfolio-workbench-project-editor.png
 repositoryUrl: https://github.com/aviman1258/project-workbench
 ---
 
