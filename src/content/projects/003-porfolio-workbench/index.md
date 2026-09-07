@@ -15,7 +15,7 @@ artifactOrder:
   - page-projects-my-pal-json.png
   - page-projects-porfolio-workbench.png
   - how-it-works.pdf
-featuredArtifact: page-home.png
+featuredArtifact: page-projects-porfolio-workbench.png
 ---
 
 ## What I Built
