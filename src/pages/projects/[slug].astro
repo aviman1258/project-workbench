@@ -235,14 +235,10 @@ const pencil = ICON_PENCIL;
 </BaseLayout>
 
 <script>
-  import {
-    browserSupportsWebAuthn,
-    startAuthentication,
-    startRegistration,
-  } from '@simplewebauthn/browser';
+  import { deviceUnlock } from '../../lib/device-unlock-client';
   import { renderPdfPreviews, wireCarousel } from '../../lib/artifact-carousel';
 
-  type FormError = Error & { field?: string; authRequired?: boolean; authProvider?: string; status?: number };
+  type FormError = Error & { field?: string; status?: number };
 
   // Arriving with #edit (e.g. from a portfolio-index card) opens the editor directly.
   // Strip the hash afterwards so later reloads (media saves reload the page) don't
@@ -336,9 +332,10 @@ const pencil = ICON_PENCIL;
     projectAuthStatus.textContent = message;
   };
 
+  let pageUnlocked = false;
   protectedControls.forEach((control) => {
     control.addEventListener('click', async (event) => {
-      if (editUnlockToken) return;
+      if (pageUnlocked) return;
       event.preventDefault();
       if (unlockBusy) return;
       unlockBusy = true;
@@ -347,20 +344,8 @@ const pencil = ICON_PENCIL;
       showProjectAuthStatus('Use your device’s face, fingerprint, PIN, or password to continue.');
 
       try {
-        if (!window.isSecureContext || !browserSupportsWebAuthn()) {
-          throw new Error('Device unlock requires HTTPS (or localhost) and a browser that supports passkeys.');
-        }
-        const optionsResult = await postJson('/api/local/device-auth/options', {});
-        const passkeyResponse = optionsResult.mode === 'registration'
-          ? await startRegistration({ optionsJSON: optionsResult.options })
-          : await startAuthentication({ optionsJSON: optionsResult.options });
-        const verification = await postJson('/api/local/device-auth/verify', {
-          ceremonyId: optionsResult.ceremonyId,
-          mode: optionsResult.mode,
-          response: passkeyResponse,
-        });
-        if (!verification.verified || !verification.token) throw new Error('The device could not verify your identity.');
-        editUnlockToken = String(verification.token);
+        editUnlockToken = await deviceUnlock();
+        pageUnlocked = true;
         protectedControls.forEach((item) => {
           const itemLabel = item.querySelector<HTMLElement>('[data-protected-label]');
           if (itemLabel) itemLabel.textContent = item.dataset.unlockedLabel ?? 'Edit project';
@@ -396,7 +381,7 @@ const pencil = ICON_PENCIL;
       window.setTimeout(() => window.location.reload(), 400);
     } catch (error) {
       const problem = error as FormError;
-      if (problem.status === 401) editUnlockToken = '';
+      if (problem.status === 401) { editUnlockToken = ''; pageUnlocked = false; }
       showError(editForm, status, problem.message || 'The project could not be updated.', problem.field);
       setBusy(editForm, false);
     }
@@ -419,7 +404,7 @@ const pencil = ICON_PENCIL;
     };
     const mediaFailure = (error: unknown, fallback: string) => {
       const problem = error as FormError;
-      if (problem.status === 401) editUnlockToken = '';
+      if (problem.status === 401) { editUnlockToken = ''; pageUnlocked = false; }
       setMediaStatus(problem.message || fallback, true);
     };
 

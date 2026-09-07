@@ -87,48 +87,16 @@ const today = new Date().toISOString().slice(0, 10);
 </BaseLayout>
 
 <script>
-  import {
-    browserSupportsWebAuthn,
-    startAuthentication,
-    startRegistration,
-  } from '@simplewebauthn/browser';
+  import { deviceUnlock } from '../lib/device-unlock-client';
 
-  type RepositoryError = Error & { field?: string; authRequired?: boolean; authProvider?: string };
+  type RepositoryError = Error & { field?: string };
 
   let unlockToken = '';
-
-  const postAuth = async (url: string, payload: unknown) => {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (unlockToken) headers['X-Portfolio-Unlock'] = unlockToken;
-    const response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
-    const result = await response.json().catch(() => ({})) as Record<string, any>;
-    if (!response.ok) throw new Error(typeof result.error === 'string' ? result.error : 'Device unlock failed.');
-    return result;
-  };
 
   // Creating a project requires the same device unlock as the rest of the editor.
   const ensureDeviceUnlock = async () => {
     if (unlockToken) return;
-    const status = await fetch('/api/local/device-auth/status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    });
-    if (status.ok) return; // a recent unlock cookie is still valid
-    if (!window.isSecureContext || !browserSupportsWebAuthn()) {
-      throw new Error('Device unlock requires HTTPS (or localhost) and a browser that supports passkeys.');
-    }
-    const challenge = await postAuth('/api/local/device-auth/options', {});
-    const credential = challenge.mode === 'registration'
-      ? await startRegistration({ optionsJSON: challenge.options })
-      : await startAuthentication({ optionsJSON: challenge.options });
-    const verification = await postAuth('/api/local/device-auth/verify', {
-      ceremonyId: challenge.ceremonyId,
-      mode: challenge.mode,
-      response: credential,
-    });
-    if (!verification.verified || !verification.token) throw new Error('The device could not verify your identity.');
-    unlockToken = String(verification.token);
+    unlockToken = await deviceUnlock();
   };
 
   const form = document.querySelector<HTMLFormElement>('[data-project-form]');

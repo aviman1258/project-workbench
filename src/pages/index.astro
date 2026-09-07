@@ -55,11 +55,7 @@ const projects = aliveProjects(await getCollection('projects'))
 </BaseLayout>
 
 <script>
-  import {
-    browserSupportsWebAuthn,
-    startAuthentication,
-    startRegistration,
-  } from '@simplewebauthn/browser';
+  import { deviceUnlock } from '../lib/device-unlock-client';
 
   const searchInput = document.querySelector<HTMLInputElement>('[data-filter-search]');
   const cards = [...document.querySelectorAll<HTMLElement>('[data-project-card]')];
@@ -153,17 +149,6 @@ const projects = aliveProjects(await getCollection('projects'))
     if (card) showCoverflowCard(card);
   }));
 
-  async function postAuth(path: string, body: unknown) {
-    const response = await fetch(path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const result = await response.json().catch(() => ({})) as Record<string, any>;
-    if (!response.ok) throw new Error(typeof result.error === 'string' ? result.error : 'Device unlock failed.');
-    return result;
-  }
-
   function showUnlockPanel(targetUrl: string) {
     pendingPrivateUrl = targetUrl;
     if (unlockPanel) unlockPanel.hidden = false;
@@ -177,25 +162,8 @@ const projects = aliveProjects(await getCollection('projects'))
     unlockInProgress = true;
     if (unlockButton) unlockButton.disabled = true;
     try {
-      const status = await fetch('/api/local/device-auth/status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}',
-      });
-      if (status.ok) {
-        window.location.assign(targetUrl);
-        return;
-      }
-      if (!browserSupportsWebAuthn()) throw new Error('Windows Hello is not available in this browser.');
-      if (unlockStatus) unlockStatus.textContent = 'Waiting for Windows Hello…';
-      const challenge = await postAuth('/api/local/device-auth/options', {});
-      const credential = challenge.mode === 'registration'
-        ? await startRegistration({ optionsJSON: challenge.options })
-        : await startAuthentication({ optionsJSON: challenge.options });
-      await postAuth('/api/local/device-auth/verify', {
-        ceremonyId: challenge.ceremonyId,
-        mode: challenge.mode,
-        response: credential,
+      await deviceUnlock({
+        onPrompt: () => { if (unlockStatus) unlockStatus.textContent = 'Waiting for Windows Hello…'; },
       });
       if (unlockStatus) unlockStatus.textContent = 'Unlocked. Opening project…';
       window.location.assign(targetUrl);
