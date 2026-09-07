@@ -22,7 +22,7 @@ const { id } = Astro.props;
   <article class="vault-content" data-vault-content hidden>
     <div class="section-heading section-heading--detail"><div><h2>Why it was built</h2></div></div>
     <div class="prose inline-editable">
-      <p data-vault-why></p>
+      <p data-vault-why data-field-display="why"></p>
     </div>
 
     <section class="artifacts-section">
@@ -51,10 +51,10 @@ const { id } = Astro.props;
       generates UI mockup images from the repository's code, builds a how-it-works PDF, and attaches them
       as artifacts — all committed to the private vault automatically.
     </p>
-    <p class="share-dialog__url" data-vault-draft-status></p>
+    <p class="share-dialog__url" data-repo-draft-status></p>
     <div class="media-delete-dialog__actions">
-      <button type="button" class="media-delete-dialog__cancel" data-vault-draft-cancel>Cancel</button>
-      <button type="button" class="share-dialog__native" data-vault-draft-confirm>Draft it</button>
+      <button type="button" class="media-delete-dialog__cancel" data-repo-draft-cancel>Cancel</button>
+      <button type="button" class="share-dialog__native" data-repo-draft-confirm>Draft it</button>
     </div>
   </dialog>
 
@@ -69,15 +69,11 @@ const { id } = Astro.props;
 </section>
 
 <script>
-  import { parseFrontmatter, serializeFrontmatter } from '../lib/frontmatter';
+  import { parseFrontmatter } from '../lib/frontmatter';
   import { mimeFor } from '../lib/artifact-types';
-  import { ICON_PENCIL } from '../lib/icons';
-  import { TOKEN_EVENT, deleteVaultFile, encodeText, findVaultFolder, getStoredToken, getVaultFile, getVaultText, getVaultBlobUrl, listVaultArtifacts, putVaultFile } from '../lib/github-client';
+  import { TOKEN_EVENT, deleteVaultFile, findVaultFolder, getStoredToken, getVaultFile, getVaultText, getVaultBlobUrl, listVaultArtifacts, putVaultFile } from '../lib/github-client';
   import { artifactKind, carouselHtml, renderPdfPreviews, wireCarousel, type CarouselArtifact } from '../lib/artifact-carousel';
-  import { openFieldEditor } from '../lib/field-editor';
-  import { aiComplete, describeLastEvidence, gatherRepoContext } from '../lib/ai-complete';
-  import { draftFromRepository } from '../lib/ai/repo-draft';
-  import { startDraftProgress } from '../lib/ai/draft-progress';
+  import { applyFieldDisplay, ensureFieldPencils, makeFrontmatterPatcher, wireFieldPencils, wireRepoDraft, type EditorBackend } from '../lib/project-editor';
 
   const root = document.querySelector<HTMLElement>('[data-private-vault]');
   if (root) {
@@ -95,15 +91,16 @@ const { id } = Astro.props;
     let vaultToken = '';
     let vaultFolder = '';
 
-    // Reads index.md, applies the mutation to the front matter, writes it back.
-    const patchVaultMeta = async (mutate: (metadata: Record<string, unknown>) => void, message: string) => {
-      const indexPath = `projects/${vaultFolder}/index.md`;
-      const { sha, text } = await getVaultFile(vaultToken, indexPath);
-      const { metadata, body } = parseFrontmatter(text);
-      mutate(metadata);
-      metadata.updatedDate = new Date().toISOString().slice(0, 10);
-      await putVaultFile(vaultToken, indexPath, encodeText(serializeFrontmatter(metadata, body)), message, sha);
+    const backend: EditorBackend = {
+      getToken: () => vaultToken,
+      getIndex: () => getVaultFile(vaultToken, `projects/${vaultFolder}/index.md`),
+      putIndex: (content, message, sha) => putVaultFile(vaultToken, `projects/${vaultFolder}/index.md`, content, message, sha),
+      putArtifact: (filename, base64, message) => putVaultFile(vaultToken, `projects/${vaultFolder}/artifacts/${filename}`, base64, message),
+      saveMessage: (label) => `Update private ${label}`,
+      onSaved: () => { status.textContent = 'Saved to the private vault.'; },
+      onAuthFailure: () => { /* the vault only renders after a working token */ },
     };
+    const patchVaultMeta = makeFrontmatterPatcher(backend);
 
     // --- media: the same carousel as public projects, backed by the vault ---
 
@@ -265,18 +262,8 @@ const { id } = Astro.props;
         if (description && typeof metadata.description === 'string') description.textContent = metadata.description;
         whyEl.textContent = typeof metadata.why === 'string' ? metadata.why : '';
         for (const field of ['repositoryUrl', 'pullRequestUrl']) {
-          const display = document.querySelector<HTMLElement>(`[data-field-display="${field}"]`);
           const value = typeof metadata[field] === 'string' ? (metadata[field] as string) : '';
-          if (display && value) {
-            display.dataset.value = value;
-            display.replaceChildren();
-            const link = document.createElement('a');
-            link.href = value;
-            link.target = '_blank';
-            link.rel = 'noreferrer';
-            link.textContent = value.replace(/^https:\/\/(www\.)?/, '');
-            display.append(link);
-          }
+          if (value) applyFieldDisplay(field, value);
         }
 
         content.hidden = false;
@@ -292,151 +279,25 @@ const { id } = Astro.props;
       }
     };
 
-    // --- editing after unlock: pencils opening the shared modal, committing to the vault ---
-    const PENCIL = ICON_PENCIL;
-    const VAULT_FIELDS: Record<string, { kind: 'input' | 'textarea' | 'status' | 'date' | 'url'; label: string; max?: number; rows?: number }> = {
-      name: { kind: 'input', label: 'name', max: 120 },
-      description: { kind: 'textarea', label: 'description', max: 500, rows: 4 },
-      why: { kind: 'textarea', label: 'why it was built', max: 3000, rows: 8 },
-      status: { kind: 'status', label: 'status' },
-      startDate: { kind: 'date', label: 'start date' },
-      repositoryUrl: { kind: 'url', label: 'repository link' },
-      pullRequestUrl: { kind: 'url', label: 'pull request link' },
-    };
-    const STATUSES = ['idea', 'dev', 'review', 'delivered'];
-
+    // --- editing after unlock: the shared editor with the vault backend ---
     function enableVaultEditing() {
-      const displayFor = (field: string) =>
-        field === 'why' ? whyEl : document.querySelector<HTMLElement>(`[data-field-display="${field}"]`);
-      const currentValue = (field: string) => {
-        const display = displayFor(field);
-        return display?.dataset.value ?? display?.textContent?.trim() ?? '';
-      };
-
-      for (const [field, spec] of Object.entries(VAULT_FIELDS)) {
-        const display = displayFor(field);
-        const wrapper = display?.closest('.inline-editable') ?? display?.parentElement;
-        if (!display || !wrapper || wrapper.querySelector('.inline-edit')) continue;
-        wrapper.classList.add('inline-editable');
-        const pencil = document.createElement('button');
-        pencil.type = 'button';
-        pencil.className = 'inline-edit';
-        pencil.setAttribute('aria-label', `Edit the ${spec.label}`);
-        pencil.innerHTML = PENCIL;
-        wrapper.append(pencil);
-
-        pencil.addEventListener('click', () => {
-          const hasRepo = Boolean(currentValue('repositoryUrl'));
-          const supportsAi = (field === 'description' || field === 'why') && Boolean(currentValue('repositoryUrl') || currentValue('pullRequestUrl'));
-          openFieldEditor({
-            spec,
-            current: currentValue(field),
-            statuses: field === 'status' ? (hasRepo ? STATUSES : ['idea']) : undefined,
-            statusNote: field === 'status' && !hasRepo ? 'Add a repository link to move this project beyond Idea.' : undefined,
-            aiComplete: supportsAi
-              ? async (existing) => {
-                  const context = await gatherRepoContext(vaultToken, currentValue('repositoryUrl'), currentValue('pullRequestUrl'));
-                  return aiComplete({ field: field as 'description' | 'why', existing, projectName: currentValue('name'), context });
-                }
-              : undefined,
-            aiEvidenceNote: describeLastEvidence,
-            onApply: async (value) => {
-              await patchVaultMeta((metadata) => {
-                if ((field === 'repositoryUrl' || field === 'pullRequestUrl') && !value) delete metadata[field];
-                else metadata[field] = value;
-                if (field === 'repositoryUrl' && !value) metadata.status = 'idea';
-              }, `Update private ${spec.label}`);
-              if (field === 'status') {
-                display.dataset.value = value;
-                display.textContent = value.replaceAll('-', ' ');
-                const badge = document.querySelector<HTMLElement>('.status-badge');
-                if (badge) { badge.className = `status-badge status-badge--${value}`; badge.textContent = value.replaceAll('-', ' '); }
-              } else if (field === 'startDate') {
-                display.dataset.value = value;
-                display.textContent = new Date(`${value}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-              } else if (field === 'repositoryUrl' || field === 'pullRequestUrl') {
-                display.dataset.value = value;
-                display.replaceChildren();
-                if (value) {
-                  const link = document.createElement('a');
-                  link.href = value;
-                  link.target = '_blank';
-                  link.rel = 'noreferrer';
-                  link.textContent = value.replace(/^https:\/\/(www\.)?/, '');
-                  display.append(link);
-                } else {
-                  display.textContent = '—';
-                }
-              } else {
-                display.textContent = value;
-              }
-              status.textContent = 'Saved to the private vault.';
-            },
-          });
-        });
-      }
+      ensureFieldPencils();
+      wireFieldPencils(backend, patchVaultMeta);
     }
 
     // --- fixed "Draft from repo" pill: one confirm, then everything applies ---
     const draftPill = root.querySelector<HTMLButtonElement>('[data-vault-repo-draft]')!;
     const draftDialog = root.querySelector<HTMLDialogElement>('[data-vault-draft-dialog]')!;
-    const draftStatus = draftDialog.querySelector<HTMLElement>('[data-vault-draft-status]')!;
-    const draftConfirm = draftDialog.querySelector<HTMLButtonElement>('[data-vault-draft-confirm]')!;
-    const fieldDisplay = (field: string) => document.querySelector<HTMLElement>(`[data-field-display="${field}"]`);
-    const syncDraftPill = () => { draftPill.hidden = !(loaded && fieldDisplay('repositoryUrl')?.dataset.value); };
-
-    draftPill.addEventListener('click', () => { draftStatus.textContent = ''; draftConfirm.disabled = false; draftDialog.showModal(); });
-    draftDialog.querySelector('[data-vault-draft-cancel]')?.addEventListener('click', () => draftDialog.close());
-    draftDialog.addEventListener('click', (event) => { if (event.target === draftDialog) draftDialog.close(); });
-    draftConfirm.addEventListener('click', async () => {
-      // the dialog's job is done — the floating researcher takes it from here
-      draftDialog.close();
-      const progress = startDraftProgress();
-      const existingArtifacts = [...document.querySelectorAll<HTMLElement>('[data-vault-carousel] [data-media-delete-trigger]')]
-        .map((t) => t.dataset.filename ?? '').filter(Boolean);
-      try {
-        const heroTitle = document.querySelector('.project-hero__main h1')?.textContent?.trim() ?? '';
-        const heroDescription = document.querySelector('.project-hero__main p')?.textContent?.trim() ?? '';
-        const result = await draftFromRepository(
-          vaultToken,
-          fieldDisplay('repositoryUrl')?.dataset.value ?? '',
-          fieldDisplay('pullRequestUrl')?.dataset.value ?? '',
-          {
-            projectName: heroTitle,
-            existingDescription: heroDescription,
-            existingWhy: whyEl.textContent ?? '',
-            existingArtifacts,
-            status: progress.status,
-            applyText: async ({ description, why }) => {
-              await patchVaultMeta((metadata) => {
-                metadata.description = description;
-                metadata.why = why;
-              }, 'Draft description and why from the repository');
-              const heroP = document.querySelector('.project-hero__main p');
-              if (heroP) heroP.textContent = description;
-              whyEl.textContent = why;
-            },
-            addArtifact: async (filename, base64) => {
-              await putVaultFile(vaultToken, `projects/${vaultFolder}/artifacts/${filename}`, base64, `Add generated artifact ${filename}`);
-            },
-          },
-        );
-        if (result.artifactNames.length) {
-          progress.status('Recording the artifact order…');
-          await patchVaultMeta((metadata) => {
-            const order = Array.isArray(metadata.artifactOrder) ? (metadata.artifactOrder as string[]) : existingArtifacts;
-            metadata.artifactOrder = [...order, ...result.artifactNames.filter((name) => !order.includes(name))];
-            if (!metadata.featuredArtifact && !existingArtifacts.length) {
-              metadata.featuredArtifact = result.artifactNames.find((name) => name.endsWith('.png')) ?? result.artifactNames[0];
-            }
-          }, 'Add generated artifacts to the order');
-          progress.status('Refreshing the carousel…');
-          await loadMediaSettled(lastMediaCount + result.artifactNames.length);
-        }
-        progress.done(`Done — text updated${result.artifactNames.length ? ` and ${result.artifactNames.length} artifacts attached` : ''}.`);
-      } catch (error) {
-        progress.fail((error as Error).message || 'The draft failed.');
-      }
+    const syncDraftPill = () => {
+      draftPill.hidden = !(loaded && document.querySelector<HTMLElement>('[data-field-display="repositoryUrl"]')?.dataset.value);
+    };
+    wireRepoDraft({
+      backend,
+      patch: patchVaultMeta,
+      pill: draftPill,
+      dialog: draftDialog,
+      afterArtifacts: (names) => loadMediaSettled(lastMediaCount + names.length),
+      doneMessage: (count) => `Done — text updated${count ? ` and ${count} artifacts attached` : ''}.`,
     });
 
     // unlock straight from the header connection — no separate panel here

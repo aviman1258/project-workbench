@@ -1,6 +1,5 @@
 ---
 import type { CollectionEntry } from 'astro:content';
-import { projectStatuses } from '../lib/project-schema';
 import { ICON_SPARKLE_SMALL } from '../lib/icons';
 
 // Invisible machinery for hosted-site editing: inline field edits (pencils),
@@ -15,7 +14,7 @@ interface Props {
 const { folder } = Astro.props;
 ---
 
-<div data-remote-editor data-project-folder={folder} data-statuses={projectStatuses.join(',')} hidden>
+<div data-remote-editor data-project-folder={folder} hidden>
   <input type="file" multiple data-remote-media-input />
 </div>
 
@@ -39,17 +38,12 @@ const { folder } = Astro.props;
 </dialog>
 
 <script>
-  import { parseFrontmatter, serializeFrontmatter } from '../lib/frontmatter';
-  import { TOKEN_EVENT, encodeText, getFile, getStoredToken, putFile, deleteFile } from '../lib/github-client';
-  import { openFieldEditor } from '../lib/field-editor';
-  import { aiComplete, describeLastEvidence, gatherRepoContext } from '../lib/ai-complete';
-  import { draftFromRepository } from '../lib/ai/repo-draft';
-  import { startDraftProgress } from '../lib/ai/draft-progress';
+  import { TOKEN_EVENT, getFile, getStoredToken, putFile, deleteFile } from '../lib/github-client';
+  import { applyFieldDisplay, currentFieldValue, makeFrontmatterPatcher, wireFieldPencils, wireRepoDraft, type EditorBackend } from '../lib/project-editor';
 
   const root = document.querySelector<HTMLElement>('[data-remote-editor]');
   if (root) {
     const folder = root.dataset.projectFolder ?? '';
-    const statuses = (root.dataset.statuses ?? '').split(',').filter(Boolean);
     const indexPath = `src/content/projects/${folder}/index.md`;
     const mediaStatus = document.querySelector<HTMLElement>('[data-media-status]');
 
@@ -69,176 +63,36 @@ const { folder } = Astro.props;
       }
     };
 
-    const patchOnce = async (mutate: (metadata: Record<string, unknown>) => void, message: string) => {
-      const { sha, text } = await getFile(token, indexPath);
-      const { metadata, body } = parseFrontmatter(text);
-      mutate(metadata);
-      metadata.updatedDate = new Date().toISOString().slice(0, 10);
-      await putFile(token, indexPath, encodeText(serializeFrontmatter(metadata, body)), message, sha);
+    const backend: EditorBackend = {
+      getToken: () => token,
+      getIndex: () => getFile(token, indexPath),
+      putIndex: (content, message, sha) => putFile(token, indexPath, content, message, sha),
+      putArtifact: (filename, base64, message) => putFile(token, `src/content/projects/${folder}/artifacts/${filename}`, base64, message),
+      saveMessage: (label) => `Update ${label} from the hosted editor`,
+      onSaved: () => setStatus('Saved. The site rebuilds in about a minute.'),
+      onAuthFailure: handleAuthFailure,
     };
-    // right after a commit, the contents API can briefly serve the previous file,
-    // making a quick follow-up edit fail on a stale sha — wait and retry once
-    const patchFrontmatter = async (mutate: (metadata: Record<string, unknown>) => void, message: string) => {
-      try {
-        await patchOnce(mutate, message);
-      } catch (error) {
-        if ((error as { status?: number }).status !== 409) throw error;
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        await patchOnce(mutate, message);
-      }
-    };
+    const patchFrontmatter = makeFrontmatterPatcher(backend);
 
     // --- inline field editing via themed modals ---
-    const FIELDS: Record<string, { kind: 'input' | 'textarea' | 'status' | 'date' | 'url'; label: string; max?: number; rows?: number }> = {
-      name: { kind: 'input', label: 'name', max: 120 },
-      description: { kind: 'textarea', label: 'description', max: 500, rows: 4 },
-      why: { kind: 'textarea', label: 'why it was built', max: 3000, rows: 8 },
-      status: { kind: 'status', label: 'status' },
-      startDate: { kind: 'date', label: 'start date' },
-      repositoryUrl: { kind: 'url', label: 'repository link' },
-      pullRequestUrl: { kind: 'url', label: 'pull request link' },
-    };
-    const displayFor = (field: string) => document.querySelector<HTMLElement>(`[data-field-display="${field}"]`);
-    const currentValue = (field: string) => {
-      const display = displayFor(field);
-      if (!display) return '';
-      return display.dataset.value ?? display.textContent?.trim() ?? '';
-    };
-    const applyDisplay = (field: string, value: string) => {
-      const display = displayFor(field);
-      if (!display) return;
-      if (field === 'status') {
-        display.dataset.value = value;
-        display.textContent = value.replaceAll('-', ' ');
-        const badge = document.querySelector<HTMLElement>('.status-badge');
-        if (badge) {
-          badge.className = `status-badge status-badge--${value}`;
-          badge.textContent = value.replaceAll('-', ' ');
-        }
-      } else if (field === 'startDate') {
-        display.dataset.value = value;
-        display.textContent = new Date(`${value}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      } else if (field === 'repositoryUrl' || field === 'pullRequestUrl') {
-        display.dataset.value = value;
-        display.replaceChildren();
-        if (value) {
-          const link = document.createElement('a');
-          link.href = value;
-          link.target = '_blank';
-          link.rel = 'noreferrer';
-          link.textContent = value.replace(/^https:\/\/(www\.)?/, '');
-          display.append(link);
-        } else {
-          display.textContent = '—';
-        }
-      } else {
-        display.textContent = value;
-        if (field === 'name') document.title = `${value} · Avishek's Portfolio`;
-      }
-    };
+    wireFieldPencils(backend, patchFrontmatter, { requireToken });
 
     // --- fixed "Draft from repo" pill: one confirm, then everything applies ---
     const draftPill = document.querySelector<HTMLButtonElement>('[data-repo-draft]');
     const draftDialog = document.querySelector<HTMLDialogElement>('[data-repo-draft-dialog]');
     if (draftPill && draftDialog) {
-      const draftStatus = draftDialog.querySelector<HTMLElement>('[data-repo-draft-status]')!;
-      const confirmButton = draftDialog.querySelector<HTMLButtonElement>('[data-repo-draft-confirm]')!;
-      const syncPill = () => { draftPill.hidden = !(getStoredToken() && currentValue('repositoryUrl')); };
+      const syncPill = () => { draftPill.hidden = !(getStoredToken() && currentFieldValue('repositoryUrl')); };
       syncPill();
       window.addEventListener(TOKEN_EVENT, syncPill);
-
-      draftPill.addEventListener('click', () => {
-        if (!requireToken()) return;
-        draftStatus.textContent = '';
-        confirmButton.disabled = false;
-        draftDialog.showModal();
-      });
-      draftDialog.querySelector('[data-repo-draft-cancel]')?.addEventListener('click', () => draftDialog.close());
-      draftDialog.addEventListener('click', (event) => { if (event.target === draftDialog) draftDialog.close(); });
-
-      confirmButton.addEventListener('click', async () => {
-        // the dialog's job is done — the floating researcher takes it from here
-        draftDialog.close();
-        const progress = startDraftProgress();
-        const existingArtifacts = [...document.querySelectorAll<HTMLElement>('[data-media-delete-trigger]')]
-          .map((t) => t.dataset.filename ?? '').filter(Boolean);
-        try {
-          const result = await draftFromRepository(token, currentValue('repositoryUrl'), currentValue('pullRequestUrl'), {
-            projectName: currentValue('name'),
-            existingDescription: currentValue('description'),
-            existingWhy: currentValue('why'),
-            existingArtifacts,
-            status: progress.status,
-            applyText: async ({ description, why }) => {
-              await patchFrontmatter((metadata) => {
-                metadata.description = description;
-                metadata.why = why;
-              }, 'Draft description and why from the repository');
-              applyDisplay('description', description);
-              applyDisplay('why', why);
-            },
-            addArtifact: async (filename, base64) => {
-              await putFile(token, `src/content/projects/${folder}/artifacts/${filename}`, base64, `Add generated artifact ${filename}`);
-            },
-          });
-          if (result.artifactNames.length) {
-            progress.status('Recording the artifact order…');
-            await patchFrontmatter((metadata) => {
-              const order = Array.isArray(metadata.artifactOrder) ? (metadata.artifactOrder as string[]) : existingArtifacts;
-              metadata.artifactOrder = [...order, ...result.artifactNames.filter((name) => !order.includes(name))];
-              if (!metadata.featuredArtifact && !existingArtifacts.length) {
-                metadata.featuredArtifact = result.artifactNames.find((name) => name.endsWith('.png')) ?? result.artifactNames[0];
-              }
-            }, 'Add generated artifacts to the order');
-          }
-          progress.done(`Done — text updated${result.artifactNames.length ? `, ${result.artifactNames.length} artifacts committed. They appear in the carousel after the site rebuilds (~1 min)` : ''}.`);
-        } catch (error) {
-          handleAuthFailure(error);
-          progress.fail((error as Error).message || 'The draft failed.');
-        }
+      wireRepoDraft({
+        backend,
+        patch: patchFrontmatter,
+        pill: draftPill,
+        dialog: draftDialog,
+        beforeOpen: requireToken,
+        doneMessage: (count) => `Done — text updated${count ? `, ${count} artifacts committed. They appear in the carousel after the site rebuilds (~1 min)` : ''}.`,
       });
     }
-
-    document.querySelectorAll<HTMLButtonElement>('[data-inline-edit]').forEach((pencil) => {
-      pencil.addEventListener('click', () => {
-        const field = pencil.dataset.inlineEdit ?? '';
-        const spec = FIELDS[field];
-        if (!spec || !requireToken()) return;
-
-        const hasRepo = Boolean(currentValue('repositoryUrl'));
-        const supportsAi = (field === 'description' || field === 'why') && Boolean(currentValue('repositoryUrl') || currentValue('pullRequestUrl'));
-
-        openFieldEditor({
-          spec,
-          current: currentValue(field),
-          statuses: field === 'status' ? (hasRepo ? statuses : ['idea']) : undefined,
-          statusNote: field === 'status' && !hasRepo ? 'Add a repository link to move this project beyond Idea.' : undefined,
-          aiComplete: supportsAi
-            ? async (existing) => {
-                const context = await gatherRepoContext(token, currentValue('repositoryUrl'), currentValue('pullRequestUrl'));
-                return aiComplete({
-                  field: field as 'description' | 'why',
-                  existing,
-                  projectName: currentValue('name'),
-                  context,
-                });
-              }
-            : undefined,
-          aiEvidenceNote: describeLastEvidence,
-          onApply: async (value) => {
-            await patchFrontmatter((metadata) => {
-              if ((field === 'repositoryUrl' || field === 'pullRequestUrl') && !value) delete metadata[field];
-              else metadata[field] = value;
-              // losing the repository drops the project back to an idea
-              if (field === 'repositoryUrl' && !value) metadata.status = 'idea';
-            }, `Update ${spec.label} from the hosted editor`);
-            applyDisplay(field, value);
-            if (field === 'repositoryUrl' && !value) applyDisplay('status', 'idea');
-            setStatus('Saved. The site rebuilds in about a minute.');
-          },
-        });
-      });
-    });
 
     // --- add media: the ＋ Add media button opens the picker directly ---
     const mediaInput = root.querySelector<HTMLInputElement>('[data-remote-media-input]')!;
