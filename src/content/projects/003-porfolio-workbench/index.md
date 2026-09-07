@@ -8,13 +8,6 @@ status: dev
 privacy: public
 startDate: 2026-09-01
 updatedDate: 2026-09-07
-artifactOrder:
-  - page-home.png
-  - page-manage.png
-  - page-projects-my-pal-json.png
-  - page-projects-porfolio-workbench.png
-  - how-it-works.pdf
-featuredArtifact: page-home.png
 repositoryUrl: https://github.com/aviman1258/project-workbench
 ---
 
