@@ -49,6 +49,19 @@ export async function gh(token: string, path: string, init: RequestInit = {}): P
   return body as Record<string, any>;
 }
 
+/** Raw text fetch (README, file contents); null when the resource is missing. */
+export async function ghRawText(token: string, path: string): Promise<string | null> {
+  const response = await fetch(`https://api.github.com${path}`, {
+    cache: 'no-store',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github.raw+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  });
+  return response.ok ? response.text() : null;
+}
+
 export async function validateToken(token: string): Promise<void> {
   const repo = await gh(token, `/repos/${GITHUB_OWNER}/${GITHUB_REPO}`);
   if (!repo.permissions?.push) throw new Error('That token cannot write to the repository.');

@@ -29,37 +29,6 @@ const today = new Date().toISOString().slice(0, 10);
 
     {!publicOnlyBuild && (
     <form class="editor-form" data-project-form novalidate>
-      <section class="ai-fill-panel" data-ai-fill-panel>
-        <div class="ai-fill-panel__intro">
-          <div>
-            <p class="eyebrow">Draft from the code</p>
-            <h2>Fill in with AI.</h2>
-            <p>Give AI a source-code repository to inspect, then review the short project draft before saving it.</p>
-          </div>
-          <span class="ai-fill-panel__local">Read-only analysis</span>
-        </div>
-
-        <div class="repository-fill">
-          <div class="repository-fill__heading">
-            <div><strong>Analyze a repository</strong><p>Paste the main GitHub, Azure DevOps, GitLab, or Bitbucket address. The PC analyzes a temporary copy, then removes it.</p></div>
-            <span>Public or private</span>
-          </div>
-          <label class="field">
-            <span>Repository address</span>
-            <input type="url" data-repository-url maxlength="500" placeholder="https://github.com/owner/repository" inputmode="url" autocapitalize="none" autocomplete="off" />
-            <small>If a private repository cannot be opened, the app will ask you to sign in safely.</small>
-          </label>
-          <div class="repository-fill__actions">
-            <button type="button" data-repository-mode="strict">Analyze exact facts</button>
-            <button type="button" data-repository-mode="inferred">Analyze + infer why</button>
-          </div>
-          <div class="repository-auth" data-repository-auth hidden></div>
-        </div>
-
-        <div class="ai-fill-result" data-ai-fill-result aria-live="polite"></div>
-        <p class="ai-fill-privacy">Repository evidence is processed through your signed-in Codex or Claude Code session on this computer. Passwords and access tokens are never collected by this form.</p>
-      </section>
-
       <section class="editor-form__section">
         <div class="editor-form__heading">
           <span>01</span>
@@ -118,57 +87,20 @@ const today = new Date().toISOString().slice(0, 10);
 </BaseLayout>
 
 <script>
-  import {
-    browserSupportsWebAuthn,
-    startAuthentication,
-    startRegistration,
-  } from '@simplewebauthn/browser';
+  import { deviceUnlock } from '../lib/device-unlock-client';
 
-  type RepositoryError = Error & { field?: string; authRequired?: boolean; authProvider?: string };
+  type RepositoryError = Error & { field?: string };
 
   let unlockToken = '';
-
-  const postAuth = async (url: string, payload: unknown) => {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (unlockToken) headers['X-Portfolio-Unlock'] = unlockToken;
-    const response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
-    const result = await response.json().catch(() => ({})) as Record<string, any>;
-    if (!response.ok) throw new Error(typeof result.error === 'string' ? result.error : 'Device unlock failed.');
-    return result;
-  };
 
   // Creating a project requires the same device unlock as the rest of the editor.
   const ensureDeviceUnlock = async () => {
     if (unlockToken) return;
-    const status = await fetch('/api/local/device-auth/status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    });
-    if (status.ok) return; // a recent unlock cookie is still valid
-    if (!window.isSecureContext || !browserSupportsWebAuthn()) {
-      throw new Error('Device unlock requires HTTPS (or localhost) and a browser that supports passkeys.');
-    }
-    const challenge = await postAuth('/api/local/device-auth/options', {});
-    const credential = challenge.mode === 'registration'
-      ? await startRegistration({ optionsJSON: challenge.options })
-      : await startAuthentication({ optionsJSON: challenge.options });
-    const verification = await postAuth('/api/local/device-auth/verify', {
-      ceremonyId: challenge.ceremonyId,
-      mode: challenge.mode,
-      response: credential,
-    });
-    if (!verification.verified || !verification.token) throw new Error('The device could not verify your identity.');
-    unlockToken = String(verification.token);
+    unlockToken = await deviceUnlock();
   };
 
   const form = document.querySelector<HTMLFormElement>('[data-project-form]');
   const statusMessage = document.querySelector<HTMLElement>('[data-form-status]');
-  const aiPanel = document.querySelector<HTMLElement>('[data-ai-fill-panel]');
-  const aiResult = document.querySelector<HTMLElement>('[data-ai-fill-result]');
-  const repositoryUrl = document.querySelector<HTMLInputElement>('[data-repository-url]');
-  const repositoryButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-repository-mode]')];
-  const repositoryAuth = document.querySelector<HTMLElement>('[data-repository-auth]');
 
   const clearFormError = () => {
     form?.querySelectorAll<HTMLElement>('.field--invalid').forEach((field) => field.classList.remove('field--invalid'));
@@ -212,131 +144,6 @@ const today = new Date().toISOString().slice(0, 10);
 
   form?.addEventListener('input', (event) => clearFieldError((event.target as HTMLInputElement).name));
   form?.addEventListener('change', (event) => clearFieldError((event.target as HTMLInputElement).name));
-
-  const setControlValue = (name: string, value: string) => {
-    if (!form || !value) return false;
-    const control = form.elements.namedItem(name);
-    if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement)) return false;
-    if (control instanceof HTMLSelectElement && ![...control.options].some((option) => option.value === value)) return false;
-    if (control.value.trim() && !['status', 'privacy', 'startDate', 'updatedDate'].includes(name)) return false;
-    control.value = value;
-    control.dispatchEvent(new Event('input', { bubbles: true }));
-    control.dispatchEvent(new Event('change', { bubbles: true }));
-    return true;
-  };
-
-  const applyAiDraft = (draft: Record<string, unknown>) => {
-    let filled = 0;
-    for (const name of ['name', 'description', 'why', 'status', 'privacy', 'startDate', 'updatedDate'] as const) {
-      if (setControlValue(name, String(draft[name] ?? ''))) filled += 1;
-    }
-    return filled;
-  };
-
-  const showRepositoryAuthentication = (provider: 'github' | 'azure', retry: () => void) => {
-    if (!repositoryAuth) return;
-    const providerName = provider === 'azure' ? 'your Microsoft work account' : 'GitHub';
-    repositoryAuth.hidden = false;
-    repositoryAuth.replaceChildren();
-    const message = document.createElement('p');
-    message.textContent = `This private repository needs access through ${providerName}.`;
-    const signIn = document.createElement('button');
-    signIn.type = 'button';
-    signIn.textContent = provider === 'azure' ? 'Sign in with Microsoft' : 'Sign in with GitHub';
-    repositoryAuth.append(message, signIn);
-
-    signIn.addEventListener('click', async () => {
-      signIn.disabled = true;
-      signIn.textContent = 'Starting secure sign-in…';
-      try {
-        const response = await fetch('/api/local/repository-auth', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ provider, repositoryUrl: repositoryUrl?.value ?? '' }),
-        });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error ?? 'Repository sign-in could not start.');
-        repositoryAuth.replaceChildren();
-        const instructions = document.createElement('p');
-        instructions.textContent = result.userCode
-          ? `Open ${provider === 'azure' ? 'Microsoft' : 'GitHub'}, enter this one-time code, approve access, then retry.`
-          : `${provider === 'azure' ? 'Microsoft' : 'GitHub'} access is ready. Retry the repository analysis.`;
-        repositoryAuth.append(instructions);
-        if (result.userCode) {
-          const code = document.createElement('code');
-          code.textContent = String(result.userCode);
-          const link = document.createElement('a');
-          link.href = String(result.verificationUrl ?? 'https://github.com/login/device');
-          link.target = '_blank';
-          link.rel = 'noreferrer';
-          link.textContent = `Open ${provider === 'azure' ? 'Microsoft' : 'GitHub'} sign-in ↗`;
-          repositoryAuth.append(code, link);
-        }
-        const retryButton = document.createElement('button');
-        retryButton.type = 'button';
-        retryButton.textContent = 'I approved it — retry';
-        retryButton.addEventListener('click', retry);
-        repositoryAuth.append(retryButton);
-      } catch (error) {
-        message.textContent = error instanceof Error ? error.message : 'Repository sign-in could not start.';
-        signIn.disabled = false;
-        signIn.textContent = 'Try sign-in again';
-      }
-    });
-  };
-
-  const analyzeRepository = async (mode: 'strict' | 'inferred') => {
-    if (!form || !aiResult || !repositoryUrl) return;
-    const address = repositoryUrl.value.trim();
-    if (!address) {
-      aiResult.className = 'ai-fill-result ai-fill-result--error';
-      aiResult.textContent = 'Enter the repository’s main address first.';
-      repositoryUrl.focus();
-      return;
-    }
-    const name = (form.elements.namedItem('name') as HTMLInputElement | null)?.value ?? '';
-    const description = (form.elements.namedItem('description') as HTMLTextAreaElement | null)?.value ?? '';
-    repositoryButtons.forEach((button) => (button.disabled = true));
-    aiPanel?.classList.add('ai-fill-panel--busy');
-    aiResult.className = 'ai-fill-result ai-fill-result--working';
-    aiResult.textContent = 'Reading the commit history, inspecting the code, and drafting the project…';
-
-    try {
-      const response = await fetch('/api/local/repository-fill', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, repositoryUrl: address, current: { name, description } }),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        const error = new Error(result.error ?? 'The repository could not be analyzed.') as RepositoryError;
-        Object.assign(error, result);
-        throw error;
-      }
-      const filled = applyAiDraft(result.draft ?? {});
-      const sourceLabel = Array.isArray(result.sources) ? result.sources[0]?.label : '';
-      aiResult.className = 'ai-fill-result ai-fill-result--success';
-      aiResult.textContent = `${filled ? `Filled ${filled} ${filled === 1 ? 'field' : 'fields'}` : 'No supported details were found'} from ${sourceLabel || 'the repository'}. Review everything before creating the project.`;
-      if (repositoryAuth) repositoryAuth.hidden = true;
-    } catch (error) {
-      const problem = error as RepositoryError;
-      aiResult.className = 'ai-fill-result ai-fill-result--error';
-      aiResult.textContent = problem.message || 'The repository could not be analyzed.';
-      if (problem.authRequired) {
-        showRepositoryAuthentication(problem.authProvider === 'azure' ? 'azure' : 'github', () => void analyzeRepository(mode));
-      }
-    } finally {
-      repositoryButtons.forEach((button) => (button.disabled = false));
-      aiPanel?.classList.remove('ai-fill-panel--busy');
-    }
-  };
-
-  repositoryButtons.forEach((button) => {
-    button.addEventListener('click', () => {
-      const mode = button.dataset.repositoryMode;
-      if (mode === 'strict' || mode === 'inferred') void analyzeRepository(mode);
-    });
-  });
 
   form?.addEventListener('submit', async (event) => {
     event.preventDefault();

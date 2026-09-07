@@ -2,17 +2,13 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Plugin } from 'vite';
-import { parse, stringify } from 'yaml';
 import {
   projectDraftSchema,
   projectMetadataSchema,
   projectUpdateSchema,
 } from './project-schema';
-import {
-  AiFillError,
-  fillProjectFromRepository,
-  startRepositoryLogin,
-} from './codex-ai-fill';
+import { parseFrontmatter as splitFrontmatter, serializeFrontmatter, slugify } from './frontmatter';
+import { mimeFor } from './artifact-types';
 import {
   createDeviceAuthOptions,
   DeviceAuthError,
@@ -24,18 +20,6 @@ import {
 const defaultProjectsRoot = path.resolve('src/content/projects');
 const maxJsonBytes = 40 * 1024 * 1024;
 const maxArtifactBytes = 25 * 1024 * 1024;
-const artifactMimeTypes: Record<string, string> = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.svg': 'image/svg+xml',
-  '.pdf': 'application/pdf',
-  '.mp4': 'video/mp4',
-  '.webm': 'video/webm',
-  '.mov': 'video/quicktime',
-};
 
 class EditorError extends Error {
   constructor(
@@ -115,18 +99,24 @@ async function readJson(request: IncomingMessage): Promise<unknown> {
 }
 
 function parseFrontmatter(source: string): Record<string, unknown> {
-  const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(source);
-  if (!match) throw new EditorError('Project index.md is missing YAML front matter.', 500);
-  return parse(match[1]) as Record<string, unknown>;
+  try {
+    return splitFrontmatter(source).metadata;
+  } catch {
+    throw new EditorError('Project index.md is missing YAML front matter.', 500);
+  }
 }
 
 async function touchProjectUpdated(projectRoot: string, patch: Record<string, unknown> = {}) {
   const indexPath = path.join(projectRoot, 'index.md');
   const source = await readFile(indexPath, 'utf8');
-  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(source);
-  if (!match) throw new EditorError('Project index.md is missing YAML front matter.', 500);
+  let split;
+  try {
+    split = splitFrontmatter(source);
+  } catch {
+    throw new EditorError('Project index.md is missing YAML front matter.', 500);
+  }
   const metadata: Record<string, unknown> = {
-    ...(parse(match[1]) as Record<string, unknown>),
+    ...split.metadata,
     ...patch,
     updatedDate: new Date().toISOString().slice(0, 10),
   };
@@ -134,8 +124,7 @@ async function touchProjectUpdated(projectRoot: string, patch: Record<string, un
     if (metadata[key] === undefined) delete metadata[key];
   }
   projectMetadataSchema.parse(metadata);
-  const body = source.slice(match[0].length).replace(/^\r?\n/, '');
-  await writeFile(indexPath, `---\n${stringify(metadata, { lineWidth: 0 }).trimEnd()}\n---\n\n${body}`, 'utf8');
+  await writeFile(indexPath, serializeFrontmatter(metadata, split.body), 'utf8');
 }
 
 async function listProjectFolders(projectsRoot: string) {
@@ -164,10 +153,6 @@ async function isPrivateProject(projectsRoot: string, slug: string): Promise<boo
   const projectRoot = await findProjectFolder(projectsRoot, slug);
   const source = await readFile(path.join(projectRoot, 'index.md'), 'utf8');
   return parseFrontmatter(source).privacy === 'private';
-}
-
-function slugify(value: string): string {
-  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
 async function createProject(projectsRoot: string, rawInput: unknown) {
@@ -214,8 +199,7 @@ async function createProject(projectsRoot: string, rawInput: unknown) {
 
   projectMetadataSchema.parse(metadata);
   await mkdir(artifactsRoot, { recursive: true });
-  const frontmatter = stringify(metadata, { lineWidth: 0 }).trimEnd();
-  await writeFile(path.join(projectRoot, 'index.md'), `---\n${frontmatter}\n---\n`, {
+  await writeFile(path.join(projectRoot, 'index.md'), serializeFrontmatter(metadata, ''), {
     encoding: 'utf8',
     flag: 'wx',
   });
@@ -251,10 +235,9 @@ async function updateProject(projectsRoot: string, slug: string, rawInput: unkno
   };
 
   projectMetadataSchema.parse(metadata);
-  const frontmatter = stringify(metadata, { lineWidth: 0 }).trimEnd();
-  const bodyMatch = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/.exec(source);
-  const legacyBody = bodyMatch ? source.slice(bodyMatch[0].length).replace(/^\r?\n/, '') : '';
-  await writeFile(indexPath, `---\n${frontmatter}\n---\n${legacyBody ? `\n${legacyBody}` : ''}`, 'utf8');
+  let legacyBody = '';
+  try { legacyBody = splitFrontmatter(source).body; } catch { /* no front matter yet */ }
+  await writeFile(indexPath, serializeFrontmatter(metadata, legacyBody), 'utf8');
   return { slug };
 }
 
@@ -423,8 +406,7 @@ export function localEditorPlugin(projectsRoot = defaultProjectsRoot): Plugin {
             if (path.basename(filename) !== filename || filename.includes('\\')) {
               throw new EditorError('Invalid artifact path.', 400);
             }
-            const extension = path.extname(filename).toLowerCase();
-            const mimeType = artifactMimeTypes[extension] ?? 'application/octet-stream';
+            const mimeType = mimeFor(filename);
             const projectRoot = await findProjectFolder(projectsRoot, slug);
             if (await isPrivateProject(projectsRoot, slug)) requireDeviceUnlock(request);
             const contents = await readFile(path.join(projectRoot, 'artifacts', filename));
@@ -484,16 +466,6 @@ export function localEditorPlugin(projectsRoot = defaultProjectsRoot): Plugin {
             return;
           }
 
-          if (pathname === '/api/local/repository-fill') {
-            sendJson(response, 200, await fillProjectFromRepository(body));
-            return;
-          }
-
-          if (pathname === '/api/local/repository-auth') {
-            sendJson(response, 200, await startRepositoryLogin(body));
-            return;
-          }
-
           const projectMatch = /^\/api\/local\/projects\/([^/]+)$/.exec(pathname);
           if (projectMatch) {
             const slug = decodeURIComponent(projectMatch[1]);
@@ -536,10 +508,9 @@ export function localEditorPlugin(projectsRoot = defaultProjectsRoot): Plugin {
 
           sendJson(response, 404, { error: 'Editor endpoint not found.' });
         } catch (error) {
-          if (error instanceof EditorError || error instanceof AiFillError || error instanceof DeviceAuthError) {
+          if (error instanceof EditorError || error instanceof DeviceAuthError) {
             const field = error instanceof EditorError ? error.field : undefined;
-            const details = error instanceof AiFillError ? error.details : undefined;
-            sendJson(response, error.status, { error: error.message, ...(field ? { field } : {}), ...details });
+            sendJson(response, error.status, { error: error.message, ...(field ? { field } : {}) });
             return;
           }
           server.config.logger.error(error instanceof Error ? error.stack ?? error.message : String(error));

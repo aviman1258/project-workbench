@@ -59,7 +59,7 @@ const today = new Date().toISOString().slice(0, 10);
 </section>
 
 <script>
-  import { stringify } from 'yaml';
+  import { serializeFrontmatter, slugify } from '../lib/frontmatter';
   import { clearToken, encodeText, getFile, getStoredToken, listProjectFolders, putFile, TOKEN_EVENT } from '../lib/github-client';
   import { draftFromRepository } from '../lib/ai/repo-draft';
   import { startDraftProgress } from '../lib/ai/draft-progress';
@@ -227,7 +227,7 @@ const today = new Date().toISOString().slice(0, 10);
         status.textContent = 'Name, description, why, and a valid start date are required.';
         return;
       }
-      const slug = fields.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const slug = slugify(fields.name);
       if (!slug) { status.textContent = 'The name needs at least one letter or number.'; return; }
       void guardDuplicate(() => void createProject(fields, slug), (message) => { status.textContent = message; });
     });
@@ -262,7 +262,7 @@ const today = new Date().toISOString().slice(0, 10);
               }
             : {}),
         };
-        const indexMd = `---\n${stringify(metadata, { lineWidth: 0 }).trimEnd()}\n---\n`;
+        const indexMd = serializeFrontmatter(metadata, '');
         await putFile(token, `src/content/projects/${folder}/index.md`, encodeText(indexMd), `Add ${fields.name} from the hosted editor`);
         await putFile(token, `src/content/projects/${folder}/artifacts/.gitkeep`, '', `Add artifacts folder for ${fields.name}`);
         for (const artifact of pendingArtifacts) {

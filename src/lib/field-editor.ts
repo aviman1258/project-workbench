@@ -3,6 +3,8 @@
 // Apply, status pills styled like the real badges, and an optional AI autocomplete
 // with a bounded undo history.
 
+import { ICON_SPARKLE } from './icons';
+
 export type FieldKind = 'input' | 'textarea' | 'status' | 'date' | 'url';
 
 export interface FieldSpec {
@@ -82,7 +84,7 @@ export function openFieldEditor(options: OpenFieldEditorOptions) {
       const aiButton = document.createElement('button');
       aiButton.type = 'button';
       aiButton.className = 'field-editor__ai-button';
-      aiButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M12 2l1.9 5.7L19.6 9l-5.7 1.9L12 16.6l-1.9-5.7L4.4 9l5.7-1.3L12 2Zm7 12 1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3ZM5 15l.8 2.2L8 18l-2.2.8L5 21l-.8-2.2L2 18l2.2-.8L5 15Z"/></svg> AI draft';
+      aiButton.innerHTML = `${ICON_SPARKLE} AI draft`;
       const undoButton = document.createElement('button');
       undoButton.type = 'button';
       undoButton.className = 'field-editor__ai-undo';

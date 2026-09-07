@@ -1,12 +1,9 @@
-// Model access for the AI pipeline. One entry point: completeStructured()
-// sends a prompt and returns schema-validated JSON, retrying once with the
-// validation errors when the first reply doesn't parse.
-//
-// The tier ('fast' | 'strong') is how escalation stays decoupled from the
-// stages: callers pick a tier, this module maps it to a model per provider.
+// Model access for the AI drafting flow. completeRaw() sends a prompt and
+// returns plain text plus a truncation flag. The tier ('fast' | 'strong')
+// keeps model choice decoupled from callers: this module maps it to a model
+// per provider.
 
-import type { z } from 'astro/zod';
-import { detectProvider, getStoredAnthropicKey, getStoredOpenAiProxy } from '../ai-complete';
+import { detectProvider, getStoredAnthropicKey, getStoredOpenAiProxy } from './keys';
 
 export type ModelTier = 'fast' | 'strong';
 
@@ -72,53 +69,4 @@ export async function completeRaw(system: string, user: string, tier: ModelTier,
     text: (response.choices?.[0]?.message?.content ?? '').trim(),
     truncated: response.choices?.[0]?.finish_reason === 'length',
   };
-}
-
-async function completeText(system: string, user: string, tier: ModelTier, maxTokens: number): Promise<string> {
-  return (await completeRaw(system, user, tier, maxTokens)).text;
-}
-
-/** Pull the JSON object out of a reply that may be fenced or wrapped in prose. */
-function extractJson(reply: string): string {
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(reply);
-  const candidate = (fenced ? fenced[1] : reply).trim();
-  const start = candidate.indexOf('{');
-  const end = candidate.lastIndexOf('}');
-  return start !== -1 && end > start ? candidate.slice(start, end + 1) : candidate;
-}
-
-export async function completeStructured<T>(options: {
-  system: string;
-  user: string;
-  schema: z.ZodType<T>;
-  tier?: ModelTier;
-  maxTokens?: number;
-}): Promise<T> {
-  const { system, user, schema, tier = 'fast', maxTokens = 3000 } = options;
-  const jsonRule = '\n\nReply with a single JSON object only — no prose, no markdown fences, no comments.';
-
-  let reply = await completeText(system + jsonRule, user, tier, maxTokens);
-  for (let attempt = 0; attempt < 2; attempt++) {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(extractJson(reply));
-    } catch {
-      parsed = undefined;
-    }
-    if (parsed !== undefined) {
-      const result = schema.safeParse(parsed);
-      if (result.success) return result.data;
-      if (attempt === 1) throw new Error(`The AI reply did not match the expected structure: ${result.error.issues[0]?.message ?? 'invalid'}.`);
-      reply = await completeText(
-        system + jsonRule,
-        `${user}\n\nYour previous reply failed validation:\n${result.error.issues.slice(0, 5).map((i) => `- ${i.path.join('.')}: ${i.message}`).join('\n')}\n\nPrevious reply:\n${reply.slice(0, 4000)}\n\nReturn the corrected JSON object only.`,
-        tier,
-        maxTokens,
-      );
-    } else {
-      if (attempt === 1) throw new Error('The AI reply was not valid JSON.');
-      reply = await completeText(system + jsonRule, `${user}\n\nYour previous reply was not valid JSON. Return a single valid JSON object only.`, tier, maxTokens);
-    }
-  }
-  throw new Error('The AI reply could not be parsed.');
 }

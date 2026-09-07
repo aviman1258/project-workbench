@@ -2,15 +2,17 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
 import StatusBadge from '../../components/StatusBadge.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { featuredArtifact, formatDate, formatLabel, getProjectFolder, loadArtifacts, publicOnlyBuild, withBase } from '../../lib/projects';
+import { aliveProjects, featuredArtifact, formatDate, formatLabel, getProjectFolder, loadArtifacts, publicOnlyBuild, withBase } from '../../lib/projects';
 import RemoteEditor from '../../components/RemoteEditor.astro';
 import PrivateVault from '../../components/PrivateVault.astro';
 import ProjectDelete from '../../components/ProjectDelete.astro';
 import { privacyLevels, projectStatuses } from '../../lib/project-schema';
+import { ICON_PENCIL } from '../../lib/icons';
+import { carouselHtml } from '../../lib/artifact-carousel';
 
 export async function getStaticPaths() {
   // Private projects build too: in public deploys they are generated locked stubs.
-  const projects = (await getCollection('projects')).filter((project) => !project.data.deleted);
+  const projects = aliveProjects(await getCollection('projects'));
   return projects.map((project) => ({ params: { slug: project.data.slug }, props: { project } }));
 }
 
@@ -27,7 +29,7 @@ const heroArtifact = featuredArtifact(project, artifacts);
 const lockedView = publicOnlyBuild && privateProject;
 const inlineEditable = publicOnlyBuild && !privateProject;
 
-const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>`;
+const pencil = ICON_PENCIL;
 ---
 
 <BaseLayout title={data.name} description={data.description}>
@@ -108,16 +110,6 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
             <span data-protected-label>{privateProject ? 'Unlock project editor' : 'Edit project details'}</span>
           </summary>
           <form class="compact-form project-edit-form" data-project-edit-form data-project-slug={data.slug} novalidate>
-            <div class="compact-ai-fill" data-edit-ai-panel>
-              <div><strong>Update from a repository</strong><p>AI inspects the code and drafts changes. Nothing is saved until you press “Save changes.”</p></div>
-              <div class="compact-ai-fill__repository">
-                <label class="field"><span>Repository address</span><input type="url" data-edit-repository-url maxlength="500" inputmode="url" autocapitalize="none" autocomplete="off" placeholder="https://github.com/owner/repository" /></label>
-                <div class="compact-ai-fill__actions"><button type="button" data-edit-repository-mode="strict">Analyze exact facts</button><button type="button" data-edit-repository-mode="inferred">Analyze + infer why</button></div>
-                <div class="repository-auth" data-edit-repository-auth hidden></div>
-              </div>
-              <p class="ai-fill-result" data-edit-ai-result aria-live="polite"></p>
-            </div>
-
             <label class="field"><span>Name</span><input name="name" value={data.name} required maxlength="120" /></label>
             <label class="field"><span>Description</span><textarea name="description" required maxlength="500" rows="3">{data.description}</textarea></label>
             <label class="field"><span>Why it was built</span><textarea name="why" required maxlength="3000" rows="8">{data.why}</textarea></label>
@@ -160,68 +152,15 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
       {!publicOnlyBuild && <input type="file" multiple hidden data-media-input />}
       <p class="form-status media-status" data-media-status aria-live="assertive"></p>
       {artifacts.length > 0 ? (
-        <div class="artifact-carousel" data-artifact-carousel {...(publicOnlyBuild ? {} : { 'data-media-dropzone': true })} tabindex={artifacts.length > 1 ? '0' : undefined} aria-label="Project artifacts carousel">
-          <div class="artifact-carousel__viewport" data-carousel-viewport>
-            <div class="artifact-carousel__track" data-carousel-track>
-              {artifacts.map((artifact, index) => (
-                <figure class="artifact-slide" data-carousel-slide aria-hidden={index === 0 ? 'false' : 'true'}>
-                  <a class="artifact-slide__media" href={artifact.href} target="_blank" rel="noreferrer" aria-label={`Open ${artifact.filename}`}>
-                    {artifact.kind === 'image' ? (
-                      <img src={artifact.href} alt={`Preview of ${artifact.filename}`} loading={index === 0 ? 'eager' : 'lazy'} />
-                    ) : artifact.kind === 'video' ? (
-                      <video src={artifact.href} muted playsinline preload="metadata"></video>
-                    ) : (
-                      <div class="artifact-slide__document" data-pdf-preview={artifact.kind === 'pdf' ? artifact.href : undefined}><span aria-hidden="true">▤</span><strong>{artifact.kind === 'file' ? (artifact.filename.split('.').pop() ?? 'file').toUpperCase() : artifact.kind.toUpperCase()}</strong><small>Open to {artifact.kind === 'pdf' ? 'preview' : 'view'}</small></div>
-                    )}
-                  </a>
-                  <button type="button" class="artifact-slide__feature" data-media-feature-trigger data-filename={artifact.filename} data-featured={artifact.filename === heroArtifact?.filename ? 'true' : 'false'} aria-label={artifact.filename === heroArtifact?.filename ? `${artifact.filename} is the featured artifact` : `Feature ${artifact.filename}`} title="Featured artifact shows on the project card">
-                    <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2.6 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3-5.8 3 1.1-6.5L2.6 9.4l6.5-.9z"></path></svg>
-                  </button>
-                  <button type="button" class="artifact-slide__delete" data-media-delete-trigger data-filename={artifact.filename} aria-label={`Delete ${artifact.filename}`} title={`Delete ${artifact.filename}`}>
-                    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
-                  </button>
-                  <figcaption>
-                    <div><strong>{artifact.filename}</strong><span>{formatLabel(artifact.kind)}</span></div>
-                    <a href={artifact.href} target="_blank" rel="noreferrer">Open original ↗</a>
-                  </figcaption>
-                </figure>
-              ))}
-            </div>
-          </div>
-
-          {privateProject && (
-            <span class="artifact-privacy-lock artifact-privacy-lock--detail" aria-label="Private project">
-              <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
-            </span>
-          )}
-
-          {artifacts.length > 1 && (
-            <div class="artifact-carousel__footer">
-              <p aria-live="polite"><strong data-carousel-current>1</strong> / {artifacts.length}</p>
-              <div class="artifact-carousel__controls">
-                <button type="button" data-carousel-previous aria-label="Show previous artifact"><span aria-hidden="true">←</span></button>
-                <button type="button" data-carousel-next aria-label="Show next artifact"><span aria-hidden="true">→</span></button>
-              </div>
-            </div>
-          )}
-
-          <div class="artifact-carousel__thumbnails" data-media-tiles aria-label="Choose an artifact, or drag a tile to reorder">
-            {artifacts.map((artifact, index) => (
-              <button type="button" data-carousel-thumbnail {...(publicOnlyBuild ? {} : { 'data-media-tile': true })} data-filename={artifact.filename} data-active={index === 0 ? 'true' : 'false'} aria-label={`Show ${artifact.filename}`} aria-current={index === 0 ? 'true' : undefined}>
-                {artifact.kind === 'image' ? <img src={artifact.href} alt="" loading="lazy" draggable="false" /> : <span data-pdf-preview={artifact.kind === 'pdf' ? artifact.href : undefined}>{artifact.kind === 'file' ? (artifact.filename.split('.').pop() ?? 'file').toUpperCase() : artifact.kind.toUpperCase()}</span>}
-              </button>
-            ))}
-          </div>
-
-          {!publicOnlyBuild && (
-          <div class="media-trash-row">
-            <span class="media-trash" data-media-trash aria-label="Drag a media tile here to delete it">
-              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
-              <small>Drag a tile here to delete</small>
-            </span>
-          </div>
-          )}
-        </div>
+        <Fragment set:html={carouselHtml(
+          artifacts.map((artifact) => ({
+            filename: artifact.filename,
+            kind: artifact.kind,
+            href: artifact.href,
+            featured: artifact.filename === heroArtifact?.filename,
+          })),
+          { lockBadge: privateProject, localEditing: !publicOnlyBuild },
+        )} />
       ) : publicOnlyBuild ? (
         <div class="artifact-empty">
           <span aria-hidden="true">□</span><div><h3>No artifacts attached yet</h3><p>Media for this project is added from the local workbench.</p></div>
@@ -248,14 +187,10 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
 </BaseLayout>
 
 <script>
-  import {
-    browserSupportsWebAuthn,
-    startAuthentication,
-    startRegistration,
-  } from '@simplewebauthn/browser';
+  import { deviceUnlock } from '../../lib/device-unlock-client';
   import { renderPdfPreviews, wireCarousel } from '../../lib/artifact-carousel';
 
-  type FormError = Error & { field?: string; authRequired?: boolean; authProvider?: string; status?: number };
+  type FormError = Error & { field?: string; status?: number };
 
   // Arriving with #edit (e.g. from a portfolio-index card) opens the editor directly.
   // Strip the hash afterwards so later reloads (media saves reload the page) don't
@@ -349,9 +284,10 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
     projectAuthStatus.textContent = message;
   };
 
+  let pageUnlocked = false;
   protectedControls.forEach((control) => {
     control.addEventListener('click', async (event) => {
-      if (editUnlockToken) return;
+      if (pageUnlocked) return;
       event.preventDefault();
       if (unlockBusy) return;
       unlockBusy = true;
@@ -360,20 +296,8 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
       showProjectAuthStatus('Use your device’s face, fingerprint, PIN, or password to continue.');
 
       try {
-        if (!window.isSecureContext || !browserSupportsWebAuthn()) {
-          throw new Error('Device unlock requires HTTPS (or localhost) and a browser that supports passkeys.');
-        }
-        const optionsResult = await postJson('/api/local/device-auth/options', {});
-        const passkeyResponse = optionsResult.mode === 'registration'
-          ? await startRegistration({ optionsJSON: optionsResult.options })
-          : await startAuthentication({ optionsJSON: optionsResult.options });
-        const verification = await postJson('/api/local/device-auth/verify', {
-          ceremonyId: optionsResult.ceremonyId,
-          mode: optionsResult.mode,
-          response: passkeyResponse,
-        });
-        if (!verification.verified || !verification.token) throw new Error('The device could not verify your identity.');
-        editUnlockToken = String(verification.token);
+        editUnlockToken = await deviceUnlock();
+        pageUnlocked = true;
         protectedControls.forEach((item) => {
           const itemLabel = item.querySelector<HTMLElement>('[data-protected-label]');
           if (itemLabel) itemLabel.textContent = item.dataset.unlockedLabel ?? 'Edit project';
@@ -391,86 +315,6 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
   });
 
   const editForm = document.querySelector<HTMLFormElement>('[data-project-edit-form]');
-  const aiResult = document.querySelector<HTMLElement>('[data-edit-ai-result]');
-  const repositoryUrl = document.querySelector<HTMLInputElement>('[data-edit-repository-url]');
-  const repositoryButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-edit-repository-mode]')];
-  const repositoryAuth = document.querySelector<HTMLElement>('[data-edit-repository-auth]');
-
-  const applyDraft = (draft: Record<string, unknown>) => {
-    if (!editForm) return 0;
-    let changed = 0;
-    for (const name of ['name', 'description', 'why', 'status', 'privacy', 'startDate'] as const) {
-      const value = String(draft[name] ?? '');
-      const control = editForm.elements.namedItem(name);
-      if (!value || !(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement)) continue;
-      if (control instanceof HTMLSelectElement && ![...control.options].some((option) => option.value === value)) continue;
-      control.value = value;
-      changed += 1;
-    }
-    return changed;
-  };
-
-  const showAuthentication = (provider: 'github' | 'azure', retry: () => void) => {
-    if (!repositoryAuth) return;
-    repositoryAuth.hidden = false;
-    repositoryAuth.replaceChildren();
-    const message = document.createElement('p');
-    message.textContent = `This private repository needs access through ${provider === 'azure' ? 'your Microsoft work account' : 'GitHub'}.`;
-    const signIn = document.createElement('button');
-    signIn.type = 'button';
-    signIn.textContent = provider === 'azure' ? 'Sign in with Microsoft' : 'Sign in with GitHub';
-    repositoryAuth.append(message, signIn);
-    signIn.addEventListener('click', async () => {
-      signIn.disabled = true;
-      signIn.textContent = 'Starting secure sign-in…';
-      try {
-        const result = await postJson('/api/local/repository-auth', { provider, repositoryUrl: repositoryUrl?.value ?? '' });
-        repositoryAuth.replaceChildren();
-        const instructions = document.createElement('p');
-        instructions.textContent = result.userCode ? 'Enter this one-time code in the sign-in page, approve access, then retry.' : 'Access is ready. Retry the repository analysis.';
-        repositoryAuth.append(instructions);
-        if (result.userCode) {
-          const code = document.createElement('code'); code.textContent = String(result.userCode);
-          const link = document.createElement('a'); link.href = String(result.verificationUrl ?? 'https://github.com/login/device'); link.target = '_blank'; link.rel = 'noreferrer'; link.textContent = 'Open sign-in ↗';
-          repositoryAuth.append(code, link);
-        }
-        const retryButton = document.createElement('button'); retryButton.type = 'button'; retryButton.textContent = 'I approved it — retry'; retryButton.addEventListener('click', retry); repositoryAuth.append(retryButton);
-      } catch (error) {
-        repositoryAuth.classList.add('repository-auth--error');
-        repositoryAuth.textContent = error instanceof Error ? error.message : 'Repository sign-in could not start.';
-      }
-    });
-  };
-
-  const analyzeRepository = async (mode: 'strict' | 'inferred') => {
-    if (!editForm || !aiResult || !repositoryUrl) return;
-    const address = repositoryUrl.value.trim();
-    if (!address) { aiResult.className = 'ai-fill-result ai-fill-result--error'; aiResult.textContent = 'Enter the repository’s main address first.'; repositoryUrl.focus(); return; }
-    const name = (editForm.elements.namedItem('name') as HTMLInputElement).value;
-    const description = (editForm.elements.namedItem('description') as HTMLTextAreaElement).value;
-    repositoryButtons.forEach((button) => (button.disabled = true));
-    aiResult.className = 'ai-fill-result ai-fill-result--working';
-    aiResult.textContent = 'Reading the commit history, inspecting the code, and drafting this edit…';
-    try {
-      const result = await postJson('/api/local/repository-fill', { mode, repositoryUrl: address, current: { name, description } });
-      const changed = applyDraft(result.draft ?? {});
-      aiResult.className = 'ai-fill-result ai-fill-result--success';
-      aiResult.textContent = `${changed ? `Drafted ${changed} ${changed === 1 ? 'field' : 'fields'}` : 'No supported changes were found'} from the repository. Review, then save.`;
-      if (repositoryAuth) repositoryAuth.hidden = true;
-    } catch (error) {
-      const problem = error as FormError;
-      aiResult.className = 'ai-fill-result ai-fill-result--error';
-      aiResult.textContent = problem.message || 'The repository could not be analyzed.';
-      if (problem.authRequired) showAuthentication(problem.authProvider === 'azure' ? 'azure' : 'github', () => void analyzeRepository(mode));
-    } finally {
-      repositoryButtons.forEach((button) => (button.disabled = false));
-    }
-  };
-
-  repositoryButtons.forEach((button) => button.addEventListener('click', () => {
-    const mode = button.dataset.editRepositoryMode;
-    if (mode === 'strict' || mode === 'inferred') void analyzeRepository(mode);
-  }));
 
   editForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -489,7 +333,7 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
       window.setTimeout(() => window.location.reload(), 400);
     } catch (error) {
       const problem = error as FormError;
-      if (problem.status === 401) editUnlockToken = '';
+      if (problem.status === 401) { editUnlockToken = ''; pageUnlocked = false; }
       showError(editForm, status, problem.message || 'The project could not be updated.', problem.field);
       setBusy(editForm, false);
     }
@@ -512,20 +356,21 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
     };
     const mediaFailure = (error: unknown, fallback: string) => {
       const problem = error as FormError;
-      if (problem.status === 401) editUnlockToken = '';
+      if (problem.status === 401) { editUnlockToken = ''; pageUnlocked = false; }
       setMediaStatus(problem.message || fallback, true);
     };
 
     // --- adding media: file picker + drop anywhere on the carousel ---
-    const allowedMedia = /\.(png|jpe?g|pdf|mp4)$/i;
+    // any file type is welcome (the server stores unknown kinds as generic
+    // files); only the size is checked client-side
     let uploading = false;
     const uploadMediaFiles = async (incoming: FileList | File[]) => {
       if (uploading) return;
       const files = [...incoming];
-      const rejected = files.filter((file) => !allowedMedia.test(file.name) || file.size > 25 * 1024 * 1024);
+      const rejected = files.filter((file) => !file.name.includes('.') || file.size > 25 * 1024 * 1024);
       const accepted = files.filter((file) => !rejected.includes(file));
       if (!accepted.length) {
-        setMediaStatus('Media must be PNG, JPG, PDF, or MP4 files up to 25 MB.', true);
+        setMediaStatus('Files need an extension and must be 25 MB or less.', true);
         return;
       }
       uploading = true;
