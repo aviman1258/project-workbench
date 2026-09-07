@@ -9,7 +9,6 @@ privacy: public
 startDate: 2026-09-01
 updatedDate: 2026-09-07
 artifactOrder:
-  - portfolio-workbench-add-project.png
   - ui-portfolio-home-project-index.png
   - ui-project-detail.png
   - ui-add-project-local-editor.png
