@@ -1,6 +1,7 @@
 import type { CollectionEntry } from 'astro:content';
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
+import { kindFor, mimeFor } from './artifact-types';
 
 const projectsRoot = path.resolve('src/content/projects');
 
@@ -8,8 +9,13 @@ const projectsRoot = path.resolve('src/content/projects');
 // projects from every page, path, and artifact endpoint. Local dev shows everything.
 export const publicOnlyBuild = process.env.PUBLIC_ONLY === '1';
 
+/** Every project the site still renders (soft-deleted ones stay in git only). */
+export function aliveProjects<T extends { data: { deleted?: boolean } }>(projects: T[]): T[] {
+  return projects.filter((project) => !project.data.deleted);
+}
+
 export function listedProjects<T extends { data: { privacy: string; deleted?: boolean } }>(projects: T[]): T[] {
-  const alive = projects.filter((project) => !project.data.deleted);
+  const alive = aliveProjects(projects);
   return publicOnlyBuild ? alive.filter((project) => project.data.privacy === 'public') : alive;
 }
 
@@ -29,21 +35,6 @@ export type ProjectArtifact = {
   mimeType: string;
 };
 
-const artifactTypes: Record<string, Pick<ProjectArtifact, 'kind' | 'mimeType'>> = {
-  '.png': { kind: 'image', mimeType: 'image/png' },
-  '.jpg': { kind: 'image', mimeType: 'image/jpeg' },
-  '.jpeg': { kind: 'image', mimeType: 'image/jpeg' },
-  '.gif': { kind: 'image', mimeType: 'image/gif' },
-  '.webp': { kind: 'image', mimeType: 'image/webp' },
-  '.svg': { kind: 'image', mimeType: 'image/svg+xml' },
-  '.pdf': { kind: 'pdf', mimeType: 'application/pdf' },
-  '.mp4': { kind: 'video', mimeType: 'video/mp4' },
-  '.webm': { kind: 'video', mimeType: 'video/webm' },
-  '.mov': { kind: 'video', mimeType: 'video/quicktime' },
-};
-
-// anything else is still a valid artifact — shown as a generic file tile
-const fallbackType: Pick<ProjectArtifact, 'kind' | 'mimeType'> = { kind: 'file', mimeType: 'application/octet-stream' };
 
 export async function getProjectFolder(project: CollectionEntry<'projects'>): Promise<string> {
   const entries = await readdir(projectsRoot, { withFileTypes: true });
@@ -81,7 +72,7 @@ export async function loadArtifacts(
     .map((entry) => {
       const sourcePath = path.join(artifactRoot, entry.name);
       const relativePath = path.relative(artifactRoot, sourcePath).replaceAll('\\', '/');
-      const type = artifactTypes[path.extname(entry.name).toLowerCase()] ?? fallbackType;
+      const type = { kind: kindFor(entry.name), mimeType: mimeFor(entry.name) };
       return {
         filename: entry.name,
         relativePath,

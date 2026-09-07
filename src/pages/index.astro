@@ -2,8 +2,8 @@
 import { getCollection } from 'astro:content';
 import ProjectCard from '../components/ProjectCard.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
-const projects = (await getCollection('projects'))
-  .filter((project) => !project.data.deleted)
+import { aliveProjects } from '../lib/projects';
+const projects = aliveProjects(await getCollection('projects'))
   .sort((a, b) => b.data.updatedDate.getTime() - a.data.updatedDate.getTime());
 ---
 

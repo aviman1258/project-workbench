@@ -5,6 +5,7 @@
 // Private projects patch both the vault record and the public stub so the next
 // rebuild drops the locked card too.
 import { withBase } from '../lib/projects';
+import { ICON_TRASH } from '../lib/icons';
 
 interface Props {
   folder: string;
@@ -26,9 +27,8 @@ const { folder, id, isPrivate, projectName } = Astro.props;
   data-home={withBase('/')}
   aria-label={`Delete ${projectName}`}
   title="Delete this project"
->
-  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
-</button>
+  set:html={ICON_TRASH}
+/>
 
 <dialog class="media-delete-dialog" data-project-delete-dialog>
   <h3>Delete this project?</h3>
@@ -44,7 +44,7 @@ const { folder, id, isPrivate, projectName } = Astro.props;
 </dialog>
 
 <script>
-  import { parse, stringify } from 'yaml';
+  import { parseFrontmatter, serializeFrontmatter } from '../lib/frontmatter';
   import { encodeText, findVaultFolder, getFile, getStoredToken, getVaultFile, putFile, putVaultFile } from '../lib/github-client';
 
   const trigger = document.querySelector<HTMLButtonElement>('[data-project-delete]');
@@ -56,11 +56,8 @@ const { folder, id, isPrivate, projectName } = Astro.props;
     const isPrivate = trigger.dataset.private === 'true';
 
     const markDeleted = (text: string) => {
-      const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
-      if (!match) throw new Error('index.md is missing YAML front matter.');
-      const metadata = { ...(parse(match[1]) as Record<string, unknown>), deleted: true, updatedDate: new Date().toISOString().slice(0, 10) };
-      const body = text.slice(match[0].length).replace(/^\r?\n/, '');
-      return `---\n${stringify(metadata, { lineWidth: 0 }).trimEnd()}\n---\n${body ? `\n${body}` : ''}`;
+      const { metadata, body } = parseFrontmatter(text);
+      return serializeFrontmatter({ ...metadata, deleted: true, updatedDate: new Date().toISOString().slice(0, 10) }, body);
     };
 
     trigger.addEventListener('click', () => { status.textContent = ''; dialog.showModal(); });

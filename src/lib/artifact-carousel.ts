@@ -3,7 +3,11 @@
 // private vault injects the same markup client-side after unlock, so it also
 // needs the HTML builder. Keeping all three here keeps the two views identical.
 
-export type ArtifactKind = 'image' | 'video' | 'pdf' | 'file';
+import { kindFor, type ArtifactKind } from './artifact-types';
+import { ICON_LOCK, ICON_TRASH } from './icons';
+
+export type { ArtifactKind };
+export const artifactKind = kindFor;
 
 export interface CarouselArtifact {
   filename: string;
@@ -11,12 +15,6 @@ export interface CarouselArtifact {
   href: string;
   featured: boolean;
 }
-
-export const artifactKind = (name: string): ArtifactKind =>
-  /\.(png|jpe?g|gif|webp|svg)$/i.test(name) ? 'image'
-  : /\.(mp4|webm|mov)$/i.test(name) ? 'video'
-  : /\.pdf$/i.test(name) ? 'pdf'
-  : 'file';
 
 /** the label shown on non-image tiles: PDF, VIDEO, or the actual extension */
 export const kindLabel = (artifact: { filename: string; kind: ArtifactKind }) =>
@@ -28,8 +26,8 @@ const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2.6 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3-5.8 3 1.1-6.5L2.6 9.4l6.5-.9z"></path></svg>';
-const TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>';
-const LOCK = '<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>';
+const TRASH = ICON_TRASH;
+const LOCK = ICON_LOCK;
 
 const slideHtml = (artifact: CarouselArtifact, index: number) => {
   const name = escapeHtml(artifact.filename);

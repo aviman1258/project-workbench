@@ -8,6 +8,7 @@
 import { completeRaw } from './provider';
 import { collectUiEvidence, serializeContext, type EvidenceSource } from './evidence';
 import { aiComplete, collectProjectEvidence } from '../ai-complete';
+import { slugify } from '../frontmatter';
 
 export interface DraftTarget {
   projectName: string;
@@ -149,7 +150,7 @@ async function buildPdfBase64(study: UiStudy, images: { name: string; purpose: s
   return (doc.output('datauristring') as string).split(',')[1];
 }
 
-const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'page';
+const pageSlug = (value: string) => slugify(value) || 'page';
 
 const uniqueName = (base: string, taken: Set<string>) => {
   let name = base;
@@ -202,14 +203,14 @@ export async function draftFromRepository(
       }
     }
     for (const image of images) {
-      const filename = uniqueName(`ui-${slugify(image.name)}.png`, taken);
+      const filename = uniqueName(`ui-${pageSlug(image.name)}.png`, taken);
       target.status(`Attaching ${filename}…`);
       await target.addArtifact(filename, image.base64);
       artifactNames.push(filename);
     }
     if (images.length) {
       target.status('Building the how-it-works PDF…');
-      const pdfName = uniqueName(`how-${slugify(study.appName)}-works.pdf`, taken);
+      const pdfName = uniqueName(`how-${pageSlug(study.appName)}-works.pdf`, taken);
       await target.addArtifact(pdfName, await buildPdfBase64(study, images));
       artifactNames.push(pdfName);
     }

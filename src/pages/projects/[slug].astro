@@ -2,15 +2,16 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
 import StatusBadge from '../../components/StatusBadge.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { featuredArtifact, formatDate, formatLabel, getProjectFolder, loadArtifacts, publicOnlyBuild, withBase } from '../../lib/projects';
+import { aliveProjects, featuredArtifact, formatDate, formatLabel, getProjectFolder, loadArtifacts, publicOnlyBuild, withBase } from '../../lib/projects';
 import RemoteEditor from '../../components/RemoteEditor.astro';
 import PrivateVault from '../../components/PrivateVault.astro';
 import ProjectDelete from '../../components/ProjectDelete.astro';
 import { privacyLevels, projectStatuses } from '../../lib/project-schema';
+import { ICON_LOCK, ICON_PENCIL, ICON_TRASH } from '../../lib/icons';
 
 export async function getStaticPaths() {
   // Private projects build too: in public deploys they are generated locked stubs.
-  const projects = (await getCollection('projects')).filter((project) => !project.data.deleted);
+  const projects = aliveProjects(await getCollection('projects'));
   return projects.map((project) => ({ params: { slug: project.data.slug }, props: { project } }));
 }
 
@@ -27,7 +28,7 @@ const heroArtifact = featuredArtifact(project, artifacts);
 const lockedView = publicOnlyBuild && privateProject;
 const inlineEditable = publicOnlyBuild && !privateProject;
 
-const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>`;
+const pencil = ICON_PENCIL;
 ---
 
 <BaseLayout title={data.name} description={data.description}>
@@ -167,9 +168,7 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
                   <button type="button" class="artifact-slide__feature" data-media-feature-trigger data-filename={artifact.filename} data-featured={artifact.filename === heroArtifact?.filename ? 'true' : 'false'} aria-label={artifact.filename === heroArtifact?.filename ? `${artifact.filename} is the featured artifact` : `Feature ${artifact.filename}`} title="Featured artifact shows on the project card">
                     <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2.6 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3-5.8 3 1.1-6.5L2.6 9.4l6.5-.9z"></path></svg>
                   </button>
-                  <button type="button" class="artifact-slide__delete" data-media-delete-trigger data-filename={artifact.filename} aria-label={`Delete ${artifact.filename}`} title={`Delete ${artifact.filename}`}>
-                    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
-                  </button>
+                  <button type="button" class="artifact-slide__delete" data-media-delete-trigger data-filename={artifact.filename} aria-label={`Delete ${artifact.filename}`} title={`Delete ${artifact.filename}`} set:html={ICON_TRASH} />
                   <figcaption>
                     <div><strong>{artifact.filename}</strong><span>{formatLabel(artifact.kind)}</span></div>
                     <a href={artifact.href} target="_blank" rel="noreferrer">Open original ↗</a>
@@ -180,9 +179,7 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
           </div>
 
           {privateProject && (
-            <span class="artifact-privacy-lock artifact-privacy-lock--detail" aria-label="Private project">
-              <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
-            </span>
+            <span class="artifact-privacy-lock artifact-privacy-lock--detail" aria-label="Private project" set:html={ICON_LOCK} />
           )}
 
           {artifacts.length > 1 && (

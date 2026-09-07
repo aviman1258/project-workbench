@@ -9,6 +9,8 @@
 // redacted (secret-looking values scrubbed), and honest (what was truncated
 // or omitted is recorded, not hidden).
 
+import { gh, ghRawText } from '../github-client';
+
 export type SourceKind =
   | 'repo' | 'readme' | 'tree' | 'pr' | 'commits' | 'diff'
   | 'reviews' | 'issue' | 'file' | 'neighbors';
@@ -75,25 +77,6 @@ export function parsePullRequest(url: string): { owner: string; repo: string; nu
   return match ? { owner: match[1], repo: match[2], number: Number(match[3]) } : null;
 }
 
-const ghHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
-  Accept: 'application/vnd.github+json',
-  'X-GitHub-Api-Version': '2022-11-28',
-});
-
-async function ghJson(token: string, url: string): Promise<any> {
-  const response = await fetch(url, { headers: ghHeaders(token), cache: 'no-store' });
-  if (!response.ok) throw new Error(`GitHub returned ${response.status} for ${url.split('.com')[1] ?? url}`);
-  return response.json();
-}
-
-async function ghRaw(token: string, url: string): Promise<string | null> {
-  const response = await fetch(url, {
-    headers: { ...ghHeaders(token), Accept: 'application/vnd.github.raw+json' },
-    cache: 'no-store',
-  });
-  return response.ok ? response.text() : null;
-}
 
 interface Collected extends EvidenceSource { priority: number }
 
@@ -116,8 +99,7 @@ export async function collectEvidence(
   const repoFromUrl = parseGitHubRepo(repositoryUrl);
   // a PR link implies its repo even when no separate repository link is set
   const repo = repoFromUrl ?? (pr ? { owner: pr.owner, repo: pr.repo } : null);
-  const api = (path: string) => `https://api.github.com${path}`;
-
+  
   let prTitle = '';
   let changedPaths: string[] = [];
   let treePaths: string[] = [];
@@ -125,7 +107,7 @@ export async function collectEvidence(
   // --- pull request evidence ---
   if (pr) {
     try {
-      const pull = await ghJson(token, api(`/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}`));
+      const pull = await gh(token, `/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}`);
       prTitle = String(pull.title ?? '');
       push(1, 'pr', `pr:${pr.number}`, `PR #${pr.number}`,
         `Title: ${pull.title}\nState: ${pull.state}${pull.merged_at ? ` (merged ${String(pull.merged_at).slice(0, 10)})` : ''}\nFiles changed: ${pull.changed_files} (+${pull.additions}/−${pull.deletions})\n\n${pull.body ?? '(no description)'}`,
@@ -135,7 +117,7 @@ export async function collectEvidence(
       const issueRefs = [...new Set([...String(pull.body ?? '').matchAll(/#(\d+)/g)].map((m) => m[1]))].slice(0, 2);
       for (const ref of issueRefs) {
         try {
-          const issue = await ghJson(token, api(`/repos/${pr.owner}/${pr.repo}/issues/${ref}`));
+          const issue = await gh(token, `/repos/${pr.owner}/${pr.repo}/issues/${ref}`);
           if (!issue.pull_request) {
             push(4, 'issue', `issue:${ref}`, `issue #${ref}`, `${issue.title}\n\n${issue.body ?? ''}`, CAPS.issue);
           }
@@ -144,13 +126,13 @@ export async function collectEvidence(
     } catch { /* PR metadata is optional */ }
 
     try {
-      const commits = await ghJson(token, api(`/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}/commits?per_page=50`));
+      const commits = await gh(token, `/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}/commits?per_page=50`);
       const subjects = (commits as any[]).map((c) => `- ${String(c.commit?.message ?? '').split('\n')[0]}`).join('\n');
       if (subjects) push(3, 'commits', 'commits', `PR #${pr.number} commits`, subjects, CAPS.commits);
     } catch { /* optional */ }
 
     try {
-      const files = await ghJson(token, api(`/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}/files?per_page=100`));
+      const files = await gh(token, `/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}/files?per_page=100`);
       const useful = (files as any[]).filter((f) => !SKIP_FILE.test(String(f.filename)));
       changedPaths = useful.map((f) => String(f.filename));
       // biggest changes first — they carry the feature
@@ -164,7 +146,7 @@ export async function collectEvidence(
     } catch { /* optional */ }
 
     try {
-      const reviews = await ghJson(token, api(`/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}/comments?per_page=20`));
+      const reviews = await gh(token, `/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}/comments?per_page=20`);
       const text = (reviews as any[]).slice(0, 12).map((c) => `${c.path ?? ''}: ${c.body}`).join('\n---\n');
       if (text) push(7, 'reviews', 'reviews', `PR #${pr.number} review comments`, text, CAPS.reviews);
     } catch { /* optional */ }
@@ -173,17 +155,17 @@ export async function collectEvidence(
   // --- repository evidence ---
   if (repo) {
     try {
-      const meta = await ghJson(token, api(`/repos/${repo.owner}/${repo.repo}`));
+      const meta = await gh(token, `/repos/${repo.owner}/${repo.repo}`);
       push(9, 'repo', 'repo', meta.full_name,
         `${meta.full_name}: ${meta.description ?? '(no description)'} · language: ${meta.language ?? '?'} · created ${String(meta.created_at ?? '').slice(0, 10)}`,
         CAPS.repo);
     } catch { /* optional */ }
 
-    const readme = await ghRaw(token, api(`/repos/${repo.owner}/${repo.repo}/readme`)).catch(() => null);
+    const readme = await ghRawText(token, `/repos/${repo.owner}/${repo.repo}/readme`).catch(() => null);
     if (readme) push(5, 'readme', 'readme', 'README', readme, CAPS.readme);
 
     try {
-      const tree = await ghJson(token, api(`/repos/${repo.owner}/${repo.repo}/git/trees/HEAD?recursive=1`));
+      const tree = await gh(token, `/repos/${repo.owner}/${repo.repo}/git/trees/HEAD?recursive=1`);
       treePaths = ((tree.tree ?? []) as any[]).filter((e) => e.type === 'blob').map((e) => String(e.path));
       push(8, 'tree', 'tree', 'file tree', treePaths.slice(0, 300).join('\n'), CAPS.tree);
     } catch { /* optional */ }
@@ -191,7 +173,7 @@ export async function collectEvidence(
     // current content of the most-changed source files: the diff shows the
     // delta, this shows what the code looks like now
     for (const path of changedPaths.slice(0, 2)) {
-      const content = await ghRaw(token, api(`/repos/${repo.owner}/${repo.repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`)).catch(() => null);
+      const content = await ghRawText(token, `/repos/${repo.owner}/${repo.repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`).catch(() => null);
       if (content) push(6, 'file', `file:${path}`, path, content, CAPS.file);
     }
 
@@ -259,7 +241,7 @@ export async function collectUiEvidence(token: string, repositoryUrl: string): P
   if (!repo) return [];
   let paths: string[] = [];
   try {
-    const tree = await ghJson(token, `https://api.github.com/repos/${repo.owner}/${repo.repo}/git/trees/HEAD?recursive=1`);
+    const tree = await gh(token, `/repos/${repo.owner}/${repo.repo}/git/trees/HEAD?recursive=1`);
     paths = ((tree.tree ?? []) as any[]).filter((e) => e.type === 'blob').map((e) => String(e.path));
   } catch {
     return [];
@@ -274,7 +256,7 @@ export async function collectUiEvidence(token: string, repositoryUrl: string): P
   let budget = UI_BUDGET;
   for (const { p } of ranked) {
     if (budget <= 0) break;
-    const content = await ghRaw(token, `https://api.github.com/repos/${repo.owner}/${repo.repo}/contents/${p.split('/').map(encodeURIComponent).join('/')}`).catch(() => null);
+    const content = await ghRawText(token, `/repos/${repo.owner}/${repo.repo}/contents/${p.split('/').map(encodeURIComponent).join('/')}`).catch(() => null);
     if (!content) continue;
     const { text, truncated } = cap(redact(content), Math.min(UI_FILE_CAP, budget));
     sources.push({ id: `file:${p}`, kind: 'file', ref: p, text, truncated });

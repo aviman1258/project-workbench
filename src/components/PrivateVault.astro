@@ -5,6 +5,8 @@
 // the page looks and edits exactly like a public project: the same modal field
 // editors, and the same artifact carousel (star to feature, trash to delete,
 // ＋ Add media) — except every save commits to the vault repo.
+import { ICON_SPARKLE_SMALL } from '../lib/icons';
+
 interface Props {
   id: string;
 }
@@ -38,7 +40,7 @@ const { id } = Astro.props;
   </article>
 
   <button type="button" class="repo-draft-pill" data-vault-repo-draft hidden>
-    <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M12 2l1.9 5.7L19.6 9l-5.7 1.9L12 16.6l-1.9-5.7L4.4 9l5.7-1.3L12 2Zm7 12 1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3Z"/></svg>
+    <Fragment set:html={ICON_SPARKLE_SMALL} />
     Draft from repo
   </button>
 
@@ -67,7 +69,9 @@ const { id } = Astro.props;
 </section>
 
 <script>
-  import { parse, stringify } from 'yaml';
+  import { parseFrontmatter, serializeFrontmatter } from '../lib/frontmatter';
+  import { mimeFor } from '../lib/artifact-types';
+  import { ICON_PENCIL } from '../lib/icons';
   import { TOKEN_EVENT, deleteVaultFile, encodeText, findVaultFolder, getStoredToken, getVaultFile, getVaultText, getVaultBlobUrl, listVaultArtifacts, putVaultFile } from '../lib/github-client';
   import { artifactKind, carouselHtml, renderPdfPreviews, wireCarousel, type CarouselArtifact } from '../lib/artifact-carousel';
   import { openFieldEditor } from '../lib/field-editor';
@@ -85,12 +89,7 @@ const { id } = Astro.props;
     const mediaStatus = root.querySelector<HTMLElement>('[data-vault-media-status]')!;
     let loaded = false;
 
-    const MIME: Record<string, string> = {
-      png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
-      webp: 'image/webp', svg: 'image/svg+xml', pdf: 'application/pdf',
-      mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
-    };
-    const mime = (name: string) => MIME[(name.split('.').pop() ?? '').toLowerCase()] ?? 'application/octet-stream';
+    const mime = mimeFor;
 
     // Set at unlock; the media and field handlers below need them afterwards.
     let vaultToken = '';
@@ -100,17 +99,10 @@ const { id } = Astro.props;
     const patchVaultMeta = async (mutate: (metadata: Record<string, unknown>) => void, message: string) => {
       const indexPath = `projects/${vaultFolder}/index.md`;
       const { sha, text } = await getVaultFile(vaultToken, indexPath);
-      const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
-      if (!match) throw new Error('index.md is missing YAML front matter.');
-      const metadata = { ...(parse(match[1]) as Record<string, unknown>) };
+      const { metadata, body } = parseFrontmatter(text);
       mutate(metadata);
       metadata.updatedDate = new Date().toISOString().slice(0, 10);
-      for (const key of Object.keys(metadata)) {
-        if (metadata[key] === undefined) delete metadata[key];
-      }
-      const body = text.slice(match[0].length).replace(/^\r?\n/, '');
-      const next = `---\n${stringify(metadata, { lineWidth: 0 }).trimEnd()}\n---\n${body ? `\n${body}` : ''}`;
-      await putVaultFile(vaultToken, indexPath, encodeText(next), message, sha);
+      await putVaultFile(vaultToken, indexPath, encodeText(serializeFrontmatter(metadata, body)), message, sha);
     };
 
     // --- media: the same carousel as public projects, backed by the vault ---
@@ -127,8 +119,7 @@ const { id } = Astro.props;
 
     const loadMedia = async () => {
       const text = await getVaultText(vaultToken, `projects/${vaultFolder}/index.md`);
-      const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
-      const metadata = match ? (parse(match[1]) as Record<string, unknown>) : {};
+      const metadata = parseFrontmatter(text).metadata;
       const order = Array.isArray(metadata.artifactOrder) ? (metadata.artifactOrder as string[]) : [];
       const rank = (name: string) => { const index = order.indexOf(name); return index === -1 ? Number.MAX_SAFE_INTEGER : index; };
 
@@ -265,8 +256,7 @@ const { id } = Astro.props;
         const folder = await findVaultFolder(token, id);
         if (!folder) throw new Error('This account cannot see the private project.');
         const text = await getVaultText(token, `projects/${folder}/index.md`);
-        const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
-        const metadata = match ? (parse(match[1]) as Record<string, unknown>) : {};
+        const metadata = parseFrontmatter(text).metadata;
 
         const hero = document.querySelector('.project-hero__main');
         const title = hero?.querySelector('h1');
@@ -303,7 +293,7 @@ const { id } = Astro.props;
     };
 
     // --- editing after unlock: pencils opening the shared modal, committing to the vault ---
-    const PENCIL = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>`;
+    const PENCIL = ICON_PENCIL;
     const VAULT_FIELDS: Record<string, { kind: 'input' | 'textarea' | 'status' | 'date' | 'url'; label: string; max?: number; rows?: number }> = {
       name: { kind: 'input', label: 'name', max: 120 },
       description: { kind: 'textarea', label: 'description', max: 500, rows: 4 },

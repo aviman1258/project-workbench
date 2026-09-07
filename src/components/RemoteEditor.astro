@@ -1,6 +1,7 @@
 ---
 import type { CollectionEntry } from 'astro:content';
 import { projectStatuses } from '../lib/project-schema';
+import { ICON_SPARKLE_SMALL } from '../lib/icons';
 
 // Invisible machinery for hosted-site editing: inline field edits (pencils),
 // direct media upload from the ＋ Add media button, per-slide delete, and the
@@ -19,7 +20,7 @@ const { folder } = Astro.props;
 </div>
 
 <button type="button" class="repo-draft-pill" data-repo-draft hidden>
-  <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M12 2l1.9 5.7L19.6 9l-5.7 1.9L12 16.6l-1.9-5.7L4.4 9l5.7-1.3L12 2Zm7 12 1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3Z"/></svg>
+  <Fragment set:html={ICON_SPARKLE_SMALL} />
   Draft from repo
 </button>
 
@@ -38,7 +39,7 @@ const { folder } = Astro.props;
 </dialog>
 
 <script>
-  import { parse, stringify } from 'yaml';
+  import { parseFrontmatter, serializeFrontmatter } from '../lib/frontmatter';
   import { TOKEN_EVENT, encodeText, getFile, getStoredToken, putFile, deleteFile } from '../lib/github-client';
   import { openFieldEditor } from '../lib/field-editor';
   import { aiComplete, describeLastEvidence, gatherRepoContext } from '../lib/ai-complete';
@@ -70,17 +71,10 @@ const { folder } = Astro.props;
 
     const patchOnce = async (mutate: (metadata: Record<string, unknown>) => void, message: string) => {
       const { sha, text } = await getFile(token, indexPath);
-      const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
-      if (!match) throw new Error('index.md is missing YAML front matter.');
-      const metadata = { ...(parse(match[1]) as Record<string, unknown>) };
+      const { metadata, body } = parseFrontmatter(text);
       mutate(metadata);
       metadata.updatedDate = new Date().toISOString().slice(0, 10);
-      for (const key of Object.keys(metadata)) {
-        if (metadata[key] === undefined) delete metadata[key];
-      }
-      const body = text.slice(match[0].length).replace(/^\r?\n/, '');
-      const next = `---\n${stringify(metadata, { lineWidth: 0 }).trimEnd()}\n---\n${body ? `\n${body}` : ''}`;
-      await putFile(token, indexPath, encodeText(next), message, sha);
+      await putFile(token, indexPath, encodeText(serializeFrontmatter(metadata, body)), message, sha);
     };
     // right after a commit, the contents API can briefly serve the previous file,
     // making a quick follow-up edit fail on a stale sha — wait and retry once
