@@ -9,11 +9,6 @@ import {
   projectUpdateSchema,
 } from './project-schema';
 import {
-  AiFillError,
-  fillProjectFromRepository,
-  startRepositoryLogin,
-} from './codex-ai-fill';
-import {
   createDeviceAuthOptions,
   DeviceAuthError,
   deviceUnlockCookie,
@@ -484,16 +479,6 @@ export function localEditorPlugin(projectsRoot = defaultProjectsRoot): Plugin {
             return;
           }
 
-          if (pathname === '/api/local/repository-fill') {
-            sendJson(response, 200, await fillProjectFromRepository(body));
-            return;
-          }
-
-          if (pathname === '/api/local/repository-auth') {
-            sendJson(response, 200, await startRepositoryLogin(body));
-            return;
-          }
-
           const projectMatch = /^\/api\/local\/projects\/([^/]+)$/.exec(pathname);
           if (projectMatch) {
             const slug = decodeURIComponent(projectMatch[1]);
@@ -536,10 +521,9 @@ export function localEditorPlugin(projectsRoot = defaultProjectsRoot): Plugin {
 
           sendJson(response, 404, { error: 'Editor endpoint not found.' });
         } catch (error) {
-          if (error instanceof EditorError || error instanceof AiFillError || error instanceof DeviceAuthError) {
+          if (error instanceof EditorError || error instanceof DeviceAuthError) {
             const field = error instanceof EditorError ? error.field : undefined;
-            const details = error instanceof AiFillError ? error.details : undefined;
-            sendJson(response, error.status, { error: error.message, ...(field ? { field } : {}), ...details });
+            sendJson(response, error.status, { error: error.message, ...(field ? { field } : {}) });
             return;
           }
           server.config.logger.error(error instanceof Error ? error.stack ?? error.message : String(error));

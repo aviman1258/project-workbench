@@ -108,16 +108,6 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
             <span data-protected-label>{privateProject ? 'Unlock project editor' : 'Edit project details'}</span>
           </summary>
           <form class="compact-form project-edit-form" data-project-edit-form data-project-slug={data.slug} novalidate>
-            <div class="compact-ai-fill" data-edit-ai-panel>
-              <div><strong>Update from a repository</strong><p>AI inspects the code and drafts changes. Nothing is saved until you press “Save changes.”</p></div>
-              <div class="compact-ai-fill__repository">
-                <label class="field"><span>Repository address</span><input type="url" data-edit-repository-url maxlength="500" inputmode="url" autocapitalize="none" autocomplete="off" placeholder="https://github.com/owner/repository" /></label>
-                <div class="compact-ai-fill__actions"><button type="button" data-edit-repository-mode="strict">Analyze exact facts</button><button type="button" data-edit-repository-mode="inferred">Analyze + infer why</button></div>
-                <div class="repository-auth" data-edit-repository-auth hidden></div>
-              </div>
-              <p class="ai-fill-result" data-edit-ai-result aria-live="polite"></p>
-            </div>
-
             <label class="field"><span>Name</span><input name="name" value={data.name} required maxlength="120" /></label>
             <label class="field"><span>Description</span><textarea name="description" required maxlength="500" rows="3">{data.description}</textarea></label>
             <label class="field"><span>Why it was built</span><textarea name="why" required maxlength="3000" rows="8">{data.why}</textarea></label>
@@ -391,86 +381,6 @@ const pencil = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="
   });
 
   const editForm = document.querySelector<HTMLFormElement>('[data-project-edit-form]');
-  const aiResult = document.querySelector<HTMLElement>('[data-edit-ai-result]');
-  const repositoryUrl = document.querySelector<HTMLInputElement>('[data-edit-repository-url]');
-  const repositoryButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-edit-repository-mode]')];
-  const repositoryAuth = document.querySelector<HTMLElement>('[data-edit-repository-auth]');
-
-  const applyDraft = (draft: Record<string, unknown>) => {
-    if (!editForm) return 0;
-    let changed = 0;
-    for (const name of ['name', 'description', 'why', 'status', 'privacy', 'startDate'] as const) {
-      const value = String(draft[name] ?? '');
-      const control = editForm.elements.namedItem(name);
-      if (!value || !(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement)) continue;
-      if (control instanceof HTMLSelectElement && ![...control.options].some((option) => option.value === value)) continue;
-      control.value = value;
-      changed += 1;
-    }
-    return changed;
-  };
-
-  const showAuthentication = (provider: 'github' | 'azure', retry: () => void) => {
-    if (!repositoryAuth) return;
-    repositoryAuth.hidden = false;
-    repositoryAuth.replaceChildren();
-    const message = document.createElement('p');
-    message.textContent = `This private repository needs access through ${provider === 'azure' ? 'your Microsoft work account' : 'GitHub'}.`;
-    const signIn = document.createElement('button');
-    signIn.type = 'button';
-    signIn.textContent = provider === 'azure' ? 'Sign in with Microsoft' : 'Sign in with GitHub';
-    repositoryAuth.append(message, signIn);
-    signIn.addEventListener('click', async () => {
-      signIn.disabled = true;
-      signIn.textContent = 'Starting secure sign-in…';
-      try {
-        const result = await postJson('/api/local/repository-auth', { provider, repositoryUrl: repositoryUrl?.value ?? '' });
-        repositoryAuth.replaceChildren();
-        const instructions = document.createElement('p');
-        instructions.textContent = result.userCode ? 'Enter this one-time code in the sign-in page, approve access, then retry.' : 'Access is ready. Retry the repository analysis.';
-        repositoryAuth.append(instructions);
-        if (result.userCode) {
-          const code = document.createElement('code'); code.textContent = String(result.userCode);
-          const link = document.createElement('a'); link.href = String(result.verificationUrl ?? 'https://github.com/login/device'); link.target = '_blank'; link.rel = 'noreferrer'; link.textContent = 'Open sign-in ↗';
-          repositoryAuth.append(code, link);
-        }
-        const retryButton = document.createElement('button'); retryButton.type = 'button'; retryButton.textContent = 'I approved it — retry'; retryButton.addEventListener('click', retry); repositoryAuth.append(retryButton);
-      } catch (error) {
-        repositoryAuth.classList.add('repository-auth--error');
-        repositoryAuth.textContent = error instanceof Error ? error.message : 'Repository sign-in could not start.';
-      }
-    });
-  };
-
-  const analyzeRepository = async (mode: 'strict' | 'inferred') => {
-    if (!editForm || !aiResult || !repositoryUrl) return;
-    const address = repositoryUrl.value.trim();
-    if (!address) { aiResult.className = 'ai-fill-result ai-fill-result--error'; aiResult.textContent = 'Enter the repository’s main address first.'; repositoryUrl.focus(); return; }
-    const name = (editForm.elements.namedItem('name') as HTMLInputElement).value;
-    const description = (editForm.elements.namedItem('description') as HTMLTextAreaElement).value;
-    repositoryButtons.forEach((button) => (button.disabled = true));
-    aiResult.className = 'ai-fill-result ai-fill-result--working';
-    aiResult.textContent = 'Reading the commit history, inspecting the code, and drafting this edit…';
-    try {
-      const result = await postJson('/api/local/repository-fill', { mode, repositoryUrl: address, current: { name, description } });
-      const changed = applyDraft(result.draft ?? {});
-      aiResult.className = 'ai-fill-result ai-fill-result--success';
-      aiResult.textContent = `${changed ? `Drafted ${changed} ${changed === 1 ? 'field' : 'fields'}` : 'No supported changes were found'} from the repository. Review, then save.`;
-      if (repositoryAuth) repositoryAuth.hidden = true;
-    } catch (error) {
-      const problem = error as FormError;
-      aiResult.className = 'ai-fill-result ai-fill-result--error';
-      aiResult.textContent = problem.message || 'The repository could not be analyzed.';
-      if (problem.authRequired) showAuthentication(problem.authProvider === 'azure' ? 'azure' : 'github', () => void analyzeRepository(mode));
-    } finally {
-      repositoryButtons.forEach((button) => (button.disabled = false));
-    }
-  };
-
-  repositoryButtons.forEach((button) => button.addEventListener('click', () => {
-    const mode = button.dataset.editRepositoryMode;
-    if (mode === 'strict' || mode === 'inferred') void analyzeRepository(mode);
-  }));
 
   editForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
