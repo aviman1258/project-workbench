@@ -24,7 +24,7 @@ jobs:
         id: scan
         run: |
           request=$(find analysis-requests -name '*.json' 2>/dev/null | head -1 || true)
-          if [ -n "$request" ] && ! grep -q '"status": *"failed"' "$request"; then
+          if [ -n "$request" ] && ! grep -q '"status"' "$request"; then
             echo "request=$request" >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/setup-node@v4

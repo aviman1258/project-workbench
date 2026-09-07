@@ -199,7 +199,10 @@ async function crawlApp(baseUrl, outDir) {
     for (const link of info.links) {
       try {
         const u = new URL(link);
-        if (u.origin === origin && !u.hash && !seen.has(u.pathname.replace(/\/$/, '') || '/')) queue.push(u.href);
+        // only same-origin HTML pages — never raw assets (artifact images, PDFs, downloads)
+        if (u.origin !== origin || u.hash) continue;
+        if (/\.(png|jpe?g|gif|webp|svg|ico|pdf|mp4|webm|mov|zip|txt|csv|json|xml|css|js|mjs|map|woff2?)$/i.test(u.pathname)) continue;
+        if (!seen.has(u.pathname.replace(/\/$/, '') || '/')) queue.push(u.href);
       } catch { /* not a URL */ }
     }
     pages.push({ path: key, screenshot: shot, title: info.title, heading: info.heading, controls: info.controls });
@@ -389,7 +392,10 @@ try {
   const body = source.slice(match[0].length).replace(/^\r?\n/, '');
   writeFileSync(indexPath, `---\n${stringify(meta, { lineWidth: 0 }).trimEnd()}\n---\n${body ? `\n${body}` : ''}`);
 
-  rmSync(REQUEST_PATH);
+  // leave a done marker so a reopened page can announce the finished run;
+  // the site clears it once the owner has seen it
+  const doneRecord = { ...request, status: 'done', finishedAt: new Date().toISOString(), artifacts: added.length, booted: Boolean(boot) };
+  writeFileSync(REQUEST_PATH, JSON.stringify(doneRecord, null, 2) + '\n');
   rmSync(WORKDIR, { recursive: true, force: true });
   log(`done: ${added.length} artifacts (${crawl.length} screenshots + report)`);
 } catch (error) {

@@ -74,7 +74,7 @@ const { id } = Astro.props;
   import { TOKEN_EVENT, deleteVaultFile, findVaultFolder, getStoredToken, getVaultFile, getVaultText, getVaultBlobUrl, listVaultArtifacts, putVaultFile } from '../lib/github-client';
   import { artifactKind, carouselHtml, renderPdfPreviews, wireCarousel, type CarouselArtifact } from '../lib/artifact-carousel';
   import { applyFieldDisplay, currentFieldValue, ensureFieldPencils, makeFrontmatterPatcher, resumeAnalysisWatch, wireFieldPencils, wireRepoDraft, type EditorBackend } from '../lib/project-editor';
-  import { analysisRequestPath } from '../lib/ai/analysis-status';
+  import { analysisRequestPath, requestStateFromText } from '../lib/ai/analysis-status';
   import { encodeText } from '../lib/github-client';
 
   const root = document.querySelector<HTMLElement>('[data-private-vault]');
@@ -114,11 +114,13 @@ const { id } = Astro.props;
       readAnalysisRequest: async () => {
         try {
           const { text } = await getVaultFile(vaultToken, analysisRequestPath(vaultFolder));
-          const data = JSON.parse(text) as Record<string, string>;
-          return { exists: true, failed: data.status === 'failed' ? (data.error ?? 'unknown error') : undefined, requestedAt: data.requestedAt };
+          return requestStateFromText(text);
         } catch {
           return { exists: false };
         }
+      },
+      clearAnalysisRequest: async () => {
+        await deleteVaultFile(vaultToken, analysisRequestPath(vaultFolder), 'Acknowledge the finished deep analysis');
       },
       saveMessage: (label) => `Update private ${label}`,
       onSaved: () => { status.textContent = 'Saved to the private vault.'; },

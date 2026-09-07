@@ -9,10 +9,20 @@ import { startDraftProgress, type DraftProgress } from './draft-progress';
 export interface AnalysisRequestState {
   exists: boolean;
   failed?: string;
+  /** set when the run completed and left its done marker */
+  done?: { artifacts?: number };
   requestedAt?: string;
 }
 
 export const analysisRequestPath = (folder: string) => `analysis-requests/${folder}.json`;
+
+/** Interpret a request file's JSON as a state (shared by both backends). */
+export function requestStateFromText(text: string): AnalysisRequestState {
+  const data = JSON.parse(text) as Record<string, unknown>;
+  if (data.status === 'failed') return { exists: true, failed: String(data.error ?? 'unknown error'), requestedAt: data.requestedAt as string };
+  if (data.status === 'done') return { exists: true, done: { artifacts: Number(data.artifacts) || undefined }, requestedAt: data.requestedAt as string };
+  return { exists: true, requestedAt: data.requestedAt as string };
+}
 
 const POLL_MS = 30_000;
 
@@ -24,12 +34,23 @@ const elapsedText = (requestedAt?: string) => {
 
 /**
  * Poll the request state and narrate it. Call once a pending request is known
- * to exist (or right after creating one). Returns a stop function.
+ * to exist (or right after creating one). `acknowledgeDone` clears the done
+ * marker once it has been shown, so it doesn't reannounce forever.
+ * Returns a stop function.
  */
-export function watchAnalysis(read: () => Promise<AnalysisRequestState>, progress?: DraftProgress): () => void {
+export function watchAnalysis(
+  read: () => Promise<AnalysisRequestState>,
+  progress?: DraftProgress,
+  acknowledgeDone?: () => Promise<void>,
+): () => void {
   const widget = progress ?? startDraftProgress();
   let timer = 0;
   let stopped = false;
+
+  const finishDone = (artifacts?: number) => {
+    widget.done(`Deep analysis finished${artifacts ? ` — ${artifacts} artifacts attached` : ''}. Reload to see the new screenshots and report.`);
+    void acknowledgeDone?.().catch(() => { /* the marker outlives a flaky delete */ });
+  };
 
   const tick = async () => {
     if (stopped) return;
@@ -41,7 +62,11 @@ export function watchAnalysis(read: () => Promise<AnalysisRequestState>, progres
     }
     if (stopped) return;
     if (!state.exists) {
-      widget.done('Deep analysis finished — reload to see the new screenshots and report.');
+      finishDone();
+      return;
+    }
+    if (state.done) {
+      finishDone(state.done.artifacts);
       return;
     }
     if (state.failed) {

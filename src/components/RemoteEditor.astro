@@ -40,7 +40,7 @@ const { folder } = Astro.props;
 <script>
   import { TOKEN_EVENT, encodeText, getFile, getStoredToken, putFile, deleteFile } from '../lib/github-client';
   import { currentFieldValue, makeFrontmatterPatcher, resumeAnalysisWatch, wireFieldPencils, wireRepoDraft, type EditorBackend } from '../lib/project-editor';
-  import { analysisRequestPath } from '../lib/ai/analysis-status';
+  import { analysisRequestPath, requestStateFromText } from '../lib/ai/analysis-status';
 
   const root = document.querySelector<HTMLElement>('[data-remote-editor]');
   if (root) {
@@ -85,11 +85,13 @@ const { folder } = Astro.props;
       readAnalysisRequest: async () => {
         try {
           const { text } = await getFile(token, requestPath);
-          const data = JSON.parse(text) as Record<string, string>;
-          return { exists: true, failed: data.status === 'failed' ? (data.error ?? 'unknown error') : undefined, requestedAt: data.requestedAt };
+          return requestStateFromText(text);
         } catch {
           return { exists: false };
         }
+      },
+      clearAnalysisRequest: async () => {
+        await deleteFile(token, requestPath, 'Acknowledge the finished deep analysis');
       },
       saveMessage: (label) => `Update ${label} from the hosted editor`,
       onSaved: () => setStatus('Saved. The site rebuilds in about a minute.'),

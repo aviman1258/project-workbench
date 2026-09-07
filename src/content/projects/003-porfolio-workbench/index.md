@@ -13,9 +13,6 @@ artifactOrder:
   - page-manage.png
   - page-projects-my-pal-json.png
   - page-projects-porfolio-workbench.png
-  - page-project-artifacts-my-pal-json-mypaljson-20260902055709-png.png
-  - page-project-artifacts-my-pal-json-mypaljson2-20260902055735-png.png
-  - page-project-artifacts-my-pal-json-ui-main-json-api-tester-png.png
   - how-it-works.pdf
 featuredArtifact: page-home.png
 repositoryUrl: https://github.com/aviman1258/project-workbench

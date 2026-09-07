@@ -24,6 +24,8 @@ export interface EditorBackend {
   requestAnalysis(): Promise<boolean>;
   /** current state of the request file — drives the progress widget */
   readAnalysisRequest(): Promise<AnalysisRequestState>;
+  /** remove the request file (acknowledging a done marker) */
+  clearAnalysisRequest(): Promise<void>;
   /** commit message for a single-field save */
   saveMessage(label: string): string;
   onSaved(field: string): void;
@@ -209,7 +211,7 @@ export function wireRepoDraft(options: {
       });
       if (result.analysisRequested) {
         // the same widget becomes the long-lived background-progress panel
-        watchAnalysis(() => backend.readAnalysisRequest(), progress);
+        watchAnalysis(() => backend.readAnalysisRequest(), progress, () => backend.clearAnalysisRequest());
       } else {
         progress.done('Done — description and why updated.');
       }
@@ -220,12 +222,12 @@ export function wireRepoDraft(options: {
   });
 }
 
-/** On page load: if a background analysis is pending for this project, show it. */
+/** On page load: if a background analysis is pending (or just finished), show it. */
 export function resumeAnalysisWatch(backend: EditorBackend) {
   void (async () => {
     try {
       const state = await backend.readAnalysisRequest();
-      if (state.exists) watchAnalysis(() => backend.readAnalysisRequest());
+      if (state.exists) watchAnalysis(() => backend.readAnalysisRequest(), undefined, () => backend.clearAnalysisRequest());
     } catch { /* no pending request */ }
   })();
 }
