@@ -48,21 +48,37 @@ const slideHtml = (artifact: CarouselArtifact, index: number) => {
   </figure>`;
 };
 
-const thumbnailHtml = (artifact: CarouselArtifact, index: number) => {
+const thumbnailHtml = (artifact: CarouselArtifact, index: number, localEditing: boolean) => {
   const name = escapeHtml(artifact.filename);
   const href = escapeHtml(artifact.href);
   const inner = artifact.kind === 'image'
     ? `<img src="${href}" alt="" loading="lazy" draggable="false" />`
     : `<span${artifact.kind === 'pdf' ? ` data-pdf-preview="${href}"` : ''}>${kindLabel(artifact)}</span>`;
-  return `<button type="button" data-carousel-thumbnail data-filename="${name}" data-active="${index === 0 ? 'true' : 'false'}" aria-label="Show ${name}"${index === 0 ? ' aria-current="true"' : ''}>${inner}</button>`;
+  return `<button type="button" data-carousel-thumbnail${localEditing ? ' data-media-tile' : ''} data-filename="${name}" data-active="${index === 0 ? 'true' : 'false'}" aria-label="Show ${name}"${index === 0 ? ' aria-current="true"' : ''}>${inner}</button>`;
 };
 
-// Same structure the public page renders in Astro — keep the two in sync.
-export function carouselHtml(artifacts: CarouselArtifact[], options: { lockBadge?: boolean } = {}): string {
+// the local editor's drag-to-delete target (stroke weight matches the original)
+const TRASH_ROW = `<div class="media-trash-row">
+      <span class="media-trash" data-media-trash aria-label="Drag a media tile here to delete it">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+        <small>Drag a tile here to delete</small>
+      </span>
+    </div>`;
+
+/**
+ * The single source of the carousel's markup. The public project page renders
+ * it at build time (set:html), the vault injects it after unlock; localEditing
+ * adds the local editor's dropzone, draggable tiles, and trash target.
+ */
+export function carouselHtml(
+  artifacts: CarouselArtifact[],
+  options: { lockBadge?: boolean; localEditing?: boolean } = {},
+): string {
   if (!artifacts.length) {
     return '<div class="artifact-empty"><span aria-hidden="true">□</span><div><h3>No artifacts attached yet</h3><p>Use ＋ Add media to upload images, PDFs, or videos.</p></div></div>';
   }
-  return `<div class="artifact-carousel" data-artifact-carousel ${artifacts.length > 1 ? 'tabindex="0"' : ''} aria-label="Project artifacts carousel">
+  const localEditing = Boolean(options.localEditing);
+  return `<div class="artifact-carousel" data-artifact-carousel${localEditing ? ' data-media-dropzone' : ''} ${artifacts.length > 1 ? 'tabindex="0"' : ''} aria-label="Project artifacts carousel">
     <div class="artifact-carousel__viewport" data-carousel-viewport>
       <div class="artifact-carousel__track" data-carousel-track>${artifacts.map(slideHtml).join('')}</div>
     </div>
@@ -74,7 +90,8 @@ export function carouselHtml(artifacts: CarouselArtifact[], options: { lockBadge
         <button type="button" data-carousel-next aria-label="Show next artifact"><span aria-hidden="true">→</span></button>
       </div>
     </div>` : ''}
-    <div class="artifact-carousel__thumbnails" data-media-tiles aria-label="Choose an artifact">${artifacts.map(thumbnailHtml).join('')}</div>
+    <div class="artifact-carousel__thumbnails" data-media-tiles aria-label="${localEditing ? 'Choose an artifact, or drag a tile to reorder' : 'Choose an artifact'}">${artifacts.map((artifact, index) => thumbnailHtml(artifact, index, localEditing)).join('')}</div>
+    ${localEditing ? TRASH_ROW : ''}
   </div>`;
 }
 

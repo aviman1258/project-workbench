@@ -7,7 +7,8 @@ import RemoteEditor from '../../components/RemoteEditor.astro';
 import PrivateVault from '../../components/PrivateVault.astro';
 import ProjectDelete from '../../components/ProjectDelete.astro';
 import { privacyLevels, projectStatuses } from '../../lib/project-schema';
-import { ICON_LOCK, ICON_PENCIL, ICON_TRASH } from '../../lib/icons';
+import { ICON_PENCIL } from '../../lib/icons';
+import { carouselHtml } from '../../lib/artifact-carousel';
 
 export async function getStaticPaths() {
   // Private projects build too: in public deploys they are generated locked stubs.
@@ -151,64 +152,15 @@ const pencil = ICON_PENCIL;
       {!publicOnlyBuild && <input type="file" multiple hidden data-media-input />}
       <p class="form-status media-status" data-media-status aria-live="assertive"></p>
       {artifacts.length > 0 ? (
-        <div class="artifact-carousel" data-artifact-carousel {...(publicOnlyBuild ? {} : { 'data-media-dropzone': true })} tabindex={artifacts.length > 1 ? '0' : undefined} aria-label="Project artifacts carousel">
-          <div class="artifact-carousel__viewport" data-carousel-viewport>
-            <div class="artifact-carousel__track" data-carousel-track>
-              {artifacts.map((artifact, index) => (
-                <figure class="artifact-slide" data-carousel-slide aria-hidden={index === 0 ? 'false' : 'true'}>
-                  <a class="artifact-slide__media" href={artifact.href} target="_blank" rel="noreferrer" aria-label={`Open ${artifact.filename}`}>
-                    {artifact.kind === 'image' ? (
-                      <img src={artifact.href} alt={`Preview of ${artifact.filename}`} loading={index === 0 ? 'eager' : 'lazy'} />
-                    ) : artifact.kind === 'video' ? (
-                      <video src={artifact.href} muted playsinline preload="metadata"></video>
-                    ) : (
-                      <div class="artifact-slide__document" data-pdf-preview={artifact.kind === 'pdf' ? artifact.href : undefined}><span aria-hidden="true">▤</span><strong>{artifact.kind === 'file' ? (artifact.filename.split('.').pop() ?? 'file').toUpperCase() : artifact.kind.toUpperCase()}</strong><small>Open to {artifact.kind === 'pdf' ? 'preview' : 'view'}</small></div>
-                    )}
-                  </a>
-                  <button type="button" class="artifact-slide__feature" data-media-feature-trigger data-filename={artifact.filename} data-featured={artifact.filename === heroArtifact?.filename ? 'true' : 'false'} aria-label={artifact.filename === heroArtifact?.filename ? `${artifact.filename} is the featured artifact` : `Feature ${artifact.filename}`} title="Featured artifact shows on the project card">
-                    <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2.6 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3-5.8 3 1.1-6.5L2.6 9.4l6.5-.9z"></path></svg>
-                  </button>
-                  <button type="button" class="artifact-slide__delete" data-media-delete-trigger data-filename={artifact.filename} aria-label={`Delete ${artifact.filename}`} title={`Delete ${artifact.filename}`} set:html={ICON_TRASH} />
-                  <figcaption>
-                    <div><strong>{artifact.filename}</strong><span>{formatLabel(artifact.kind)}</span></div>
-                    <a href={artifact.href} target="_blank" rel="noreferrer">Open original ↗</a>
-                  </figcaption>
-                </figure>
-              ))}
-            </div>
-          </div>
-
-          {privateProject && (
-            <span class="artifact-privacy-lock artifact-privacy-lock--detail" aria-label="Private project" set:html={ICON_LOCK} />
-          )}
-
-          {artifacts.length > 1 && (
-            <div class="artifact-carousel__footer">
-              <p aria-live="polite"><strong data-carousel-current>1</strong> / {artifacts.length}</p>
-              <div class="artifact-carousel__controls">
-                <button type="button" data-carousel-previous aria-label="Show previous artifact"><span aria-hidden="true">←</span></button>
-                <button type="button" data-carousel-next aria-label="Show next artifact"><span aria-hidden="true">→</span></button>
-              </div>
-            </div>
-          )}
-
-          <div class="artifact-carousel__thumbnails" data-media-tiles aria-label="Choose an artifact, or drag a tile to reorder">
-            {artifacts.map((artifact, index) => (
-              <button type="button" data-carousel-thumbnail {...(publicOnlyBuild ? {} : { 'data-media-tile': true })} data-filename={artifact.filename} data-active={index === 0 ? 'true' : 'false'} aria-label={`Show ${artifact.filename}`} aria-current={index === 0 ? 'true' : undefined}>
-                {artifact.kind === 'image' ? <img src={artifact.href} alt="" loading="lazy" draggable="false" /> : <span data-pdf-preview={artifact.kind === 'pdf' ? artifact.href : undefined}>{artifact.kind === 'file' ? (artifact.filename.split('.').pop() ?? 'file').toUpperCase() : artifact.kind.toUpperCase()}</span>}
-              </button>
-            ))}
-          </div>
-
-          {!publicOnlyBuild && (
-          <div class="media-trash-row">
-            <span class="media-trash" data-media-trash aria-label="Drag a media tile here to delete it">
-              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
-              <small>Drag a tile here to delete</small>
-            </span>
-          </div>
-          )}
-        </div>
+        <Fragment set:html={carouselHtml(
+          artifacts.map((artifact) => ({
+            filename: artifact.filename,
+            kind: artifact.kind,
+            href: artifact.href,
+            featured: artifact.filename === heroArtifact?.filename,
+          })),
+          { lockBadge: privateProject, localEditing: !publicOnlyBuild },
+        )} />
       ) : publicOnlyBuild ? (
         <div class="artifact-empty">
           <span aria-hidden="true">□</span><div><h3>No artifacts attached yet</h3><p>Media for this project is added from the local workbench.</p></div>
