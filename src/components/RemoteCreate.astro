@@ -44,11 +44,23 @@ const today = new Date().toISOString().slice(0, 10);
       </form>
     </details>
   </div>
+
+  <dialog class="media-delete-dialog" data-duplicate-dialog>
+    <h3>This repository is already a project</h3>
+    <p data-duplicate-text></p>
+    <p class="share-dialog__url" data-duplicate-status></p>
+    <div class="media-delete-dialog__actions media-delete-dialog__actions--stack">
+      <button type="button" class="share-dialog__native" data-duplicate-restore hidden>Restore it instead</button>
+      <a class="share-dialog__native" data-duplicate-open hidden>Open the existing project</a>
+      <button type="button" class="media-delete-dialog__confirm" data-duplicate-anyway>Add as a new project anyway</button>
+      <button type="button" class="media-delete-dialog__cancel" data-duplicate-cancel>Cancel</button>
+    </div>
+  </dialog>
 </section>
 
 <script>
   import { stringify } from 'yaml';
-  import { clearToken, encodeText, getStoredToken, listProjectFolders, putFile, TOKEN_EVENT } from '../lib/github-client';
+  import { clearToken, encodeText, getFile, getStoredToken, listProjectFolders, putFile, TOKEN_EVENT } from '../lib/github-client';
   import { draftFromRepository } from '../lib/ai/repo-draft';
   import { startDraftProgress } from '../lib/ai/draft-progress';
 
@@ -84,7 +96,85 @@ const today = new Date().toISOString().slice(0, 10);
     repoInput.addEventListener('input', syncAiButton);
     syncAiButton();
 
-    aiButton.addEventListener('click', async () => {
+    // --- duplicate guard: the same repo+PR combo may already be a project ---
+    // the dialog sits outside the tools div — query the document
+    const dupDialog = document.querySelector<HTMLDialogElement>('[data-duplicate-dialog]')!;
+    const dupText = dupDialog.querySelector<HTMLElement>('[data-duplicate-text]')!;
+    const dupStatus = dupDialog.querySelector<HTMLElement>('[data-duplicate-status]')!;
+    const dupRestore = dupDialog.querySelector<HTMLButtonElement>('[data-duplicate-restore]')!;
+    const dupOpen = dupDialog.querySelector<HTMLAnchorElement>('[data-duplicate-open]')!;
+    let allowDuplicate = false;
+    let pendingProceed: (() => void) | null = null;
+    let pendingMatch: { folder: string; name: string; slug: string; deleted: boolean } | null = null;
+
+    const normalizeUrl = (url: string) => url.trim().toLowerCase().replace(/\.git$/, '').replace(/\/+$/, '');
+    // typing a different combo resets an earlier "add anyway"
+    repoInput.addEventListener('input', () => { allowDuplicate = false; });
+    control('pullRequestUrl').addEventListener('input', () => { allowDuplicate = false; });
+
+    const findExisting = async () => {
+      const repo = normalizeUrl(repoInput.value);
+      const pr = normalizeUrl(control('pullRequestUrl').value);
+      if (!repo && !pr) return null;
+      for (const folder of await listProjectFolders(token)) {
+        try {
+          const { text } = await getFile(token, `src/content/projects/${folder}/index.md`);
+          const pick = (key: string) => new RegExp(`^${key}:\\s*(.+)$`, 'm').exec(text)?.[1]?.trim().replace(/^["']|["']$/g, '') ?? '';
+          if (normalizeUrl(pick('repositoryUrl')) === repo && normalizeUrl(pick('pullRequestUrl')) === pr) {
+            return { folder, name: pick('name') || folder, slug: pick('slug'), deleted: pick('deleted') === 'true' };
+          }
+        } catch { /* stubs and unreadable folders can't match */ }
+      }
+      return null;
+    };
+
+    const guardDuplicate = async (proceed: () => void, busyNote: (message: string) => void) => {
+      if (allowDuplicate) { proceed(); return; }
+      busyNote('Checking for an existing project with this repository…');
+      let existing = null;
+      try { existing = await findExisting(); } catch { /* the check is best-effort */ }
+      if (!existing) { busyNote(''); proceed(); return; }
+      pendingProceed = proceed;
+      pendingMatch = existing;
+      busyNote('');
+      dupText.textContent = `“${existing.name}” already uses this repository${normalizeUrl(control('pullRequestUrl').value) ? ' and pull request' : ''} — and it is ${existing.deleted ? 'soft-deleted' : 'live on the site'}.`;
+      dupStatus.textContent = '';
+      dupRestore.hidden = !existing.deleted;
+      dupOpen.hidden = existing.deleted;
+      dupOpen.href = `${projectsBase}/${existing.slug}`;
+      dupDialog.showModal();
+    };
+
+    dupDialog.querySelector('[data-duplicate-cancel]')?.addEventListener('click', () => dupDialog.close());
+    dupDialog.addEventListener('click', (event) => { if (event.target === dupDialog) dupDialog.close(); });
+    dupDialog.querySelector('[data-duplicate-anyway]')?.addEventListener('click', () => {
+      allowDuplicate = true;
+      dupDialog.close();
+      pendingProceed?.();
+    });
+    dupRestore.addEventListener('click', async () => {
+      if (!pendingMatch) return;
+      dupRestore.disabled = true;
+      dupStatus.textContent = 'Restoring…';
+      try {
+        const path = `src/content/projects/${pendingMatch.folder}/index.md`;
+        const { sha, text } = await getFile(token, path);
+        const next = text.split('\n').filter((line) => !/^deleted:\s*true\s*$/.test(line)).join('\n');
+        await putFile(token, path, encodeText(next), `Restore ${pendingMatch.name} (undo soft delete)`, sha);
+        dupStatus.textContent = 'Restored — it returns to the site after the rebuild (~1 min). No new project was created.';
+        setTimeout(() => dupDialog.close(), 3500);
+      } catch (error) {
+        dupStatus.textContent = (error as Error).message || 'The restore failed.';
+        dupRestore.disabled = false;
+      }
+    });
+
+    aiButton.addEventListener('click', () => {
+      if (!looksLikeRepo()) return;
+      void guardDuplicate(() => void runDraft(), (message) => { aiStatus.textContent = message; });
+    });
+
+    const runDraft = async () => {
       const repositoryUrl = repoInput.value.trim();
       if (!looksLikeRepo()) return;
       aiButton.disabled = true;
@@ -117,9 +207,9 @@ const today = new Date().toISOString().slice(0, 10);
       } finally {
         syncAiButton();
       }
-    });
+    };
 
-    form.addEventListener('submit', async (event) => {
+    form.addEventListener('submit', (event) => {
       event.preventDefault();
       const formData = new FormData(form);
       const fields = {
@@ -139,7 +229,10 @@ const today = new Date().toISOString().slice(0, 10);
       }
       const slug = fields.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
       if (!slug) { status.textContent = 'The name needs at least one letter or number.'; return; }
+      void guardDuplicate(() => void createProject(fields, slug), (message) => { status.textContent = message; });
+    });
 
+    const createProject = async (fields: Record<string, string>, slug: string) => {
       const submit = form.querySelector<HTMLButtonElement>('button[type=submit]')!;
       submit.disabled = true;
       status.textContent = 'Creating the project…';
@@ -196,6 +289,6 @@ const today = new Date().toISOString().slice(0, 10);
       } finally {
         submit.disabled = false;
       }
-    });
+    };
   }
 </script>

@@ -2024,6 +2024,19 @@ body:not([data-github-connected='true']) .site-action--needs-github {
   display: none;
 }
 
+/* duplicate-project dialog offers up to three actions — let them wrap */
+.media-delete-dialog__actions--stack {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.media-delete-dialog__actions--stack a.share-dialog__native {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
 /* repo field + its draft button on one row */
 .field-with-action {
   display: flex;
