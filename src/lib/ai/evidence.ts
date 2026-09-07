@@ -23,20 +23,12 @@ export interface EvidenceSource {
   truncated: boolean;
 }
 
-export interface EscalationSignals {
-  emptyPrBody: boolean;
-  noLinkedIssue: boolean;
-  largePr: boolean;
-  manyAreasTouched: boolean;
-}
-
 export interface RepositoryContext {
   repo?: { owner: string; repo: string };
   pr?: { number: number; title: string };
   sources: EvidenceSource[];
   /** source ids dropped entirely because the budget ran out */
   omitted: string[];
-  signals: EscalationSignals;
   chars: number;
 }
 
@@ -126,7 +118,6 @@ export async function collectEvidence(
   const repo = repoFromUrl ?? (pr ? { owner: pr.owner, repo: pr.repo } : null);
   const api = (path: string) => `https://api.github.com${path}`;
 
-  const signals: EscalationSignals = { emptyPrBody: false, noLinkedIssue: true, largePr: false, manyAreasTouched: false };
   let prTitle = '';
   let changedPaths: string[] = [];
   let treePaths: string[] = [];
@@ -136,8 +127,6 @@ export async function collectEvidence(
     try {
       const pull = await ghJson(token, api(`/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}`));
       prTitle = String(pull.title ?? '');
-      signals.emptyPrBody = !String(pull.body ?? '').trim();
-      signals.largePr = Number(pull.changed_files ?? 0) > 40 || Number(pull.additions ?? 0) + Number(pull.deletions ?? 0) > 4000;
       push(1, 'pr', `pr:${pr.number}`, `PR #${pr.number}`,
         `Title: ${pull.title}\nState: ${pull.state}${pull.merged_at ? ` (merged ${String(pull.merged_at).slice(0, 10)})` : ''}\nFiles changed: ${pull.changed_files} (+${pull.additions}/−${pull.deletions})\n\n${pull.body ?? '(no description)'}`,
         CAPS.pr);
@@ -148,7 +137,6 @@ export async function collectEvidence(
         try {
           const issue = await ghJson(token, api(`/repos/${pr.owner}/${pr.repo}/issues/${ref}`));
           if (!issue.pull_request) {
-            signals.noLinkedIssue = false;
             push(4, 'issue', `issue:${ref}`, `issue #${ref}`, `${issue.title}\n\n${issue.body ?? ''}`, CAPS.issue);
           }
         } catch { /* dead reference */ }
@@ -165,8 +153,6 @@ export async function collectEvidence(
       const files = await ghJson(token, api(`/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}/files?per_page=100`));
       const useful = (files as any[]).filter((f) => !SKIP_FILE.test(String(f.filename)));
       changedPaths = useful.map((f) => String(f.filename));
-      const areas = new Set(changedPaths.map((p) => p.split('/').slice(0, 2).join('/')));
-      signals.manyAreasTouched = areas.size > 6;
       // biggest changes first — they carry the feature
       useful.sort((a, b) => (Number(b.additions) + Number(b.deletions)) - (Number(a.additions) + Number(a.deletions)));
       for (const file of useful.slice(0, 25)) {
@@ -236,7 +222,6 @@ export async function collectEvidence(
     pr: pr ? { number: pr.number, title: prTitle } : undefined,
     sources,
     omitted,
-    signals,
     chars,
   };
 }
