@@ -11,3 +11,4 @@ dist/
 src/content/projects/001-qa-listing-search/
 src/content/projects/002-filming-nightlife/
 src/content/projects/*-private-stub/
+.analysis-workdir/

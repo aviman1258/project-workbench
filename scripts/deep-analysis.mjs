@@ -18,6 +18,7 @@
 
 import { execFile, execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, copyFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import Anthropic from '@anthropic-ai/sdk';
@@ -28,7 +29,7 @@ const exec = promisify(execFile);
 const REQUEST_PATH = process.env.REQUEST_PATH ?? '';
 const PROJECTS_ROOT = process.env.PROJECTS_ROOT ?? 'src/content/projects';
 const MODEL = process.env.ANALYSIS_MODEL ?? 'claude-sonnet-5';
-const WORKDIR = path.resolve('.analysis-workdir');
+const WORKDIR = path.join(os.tmpdir(), 'workbench-deep-analysis');
 
 const log = (...parts) => console.log('[deep-analysis]', ...parts);
 
@@ -396,8 +397,13 @@ try {
   // the site clears it once the owner has seen it
   const doneRecord = { ...request, status: 'done', finishedAt: new Date().toISOString(), artifacts: added.length, booted: Boolean(boot) };
   writeFileSync(REQUEST_PATH, JSON.stringify(doneRecord, null, 2) + '\n');
-  rmSync(WORKDIR, { recursive: true, force: true });
   log(`done: ${added.length} artifacts (${crawl.length} screenshots + report)`);
+  try {
+    rmSync(WORKDIR, { recursive: true, force: true, maxRetries: 3, retryDelay: 1000 });
+  } catch (error) {
+    // the booted app may still hold files open; the runner VM is discarded anyway
+    log('workdir cleanup skipped:', error.message);
+  }
 } catch (error) {
   fail(error.stack ?? error.message);
 }
