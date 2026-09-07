@@ -9,7 +9,6 @@ privacy: public
 startDate: 2026-09-01
 updatedDate: 2026-09-07
 artifactOrder:
-  - ui-portfolio-home-project-index.png
   - ui-project-detail.png
   - ui-add-project-local-editor.png
   - ui-not-found-404.png
