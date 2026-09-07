@@ -361,15 +361,16 @@ const pencil = ICON_PENCIL;
     };
 
     // --- adding media: file picker + drop anywhere on the carousel ---
-    const allowedMedia = /\.(png|jpe?g|pdf|mp4)$/i;
+    // any file type is welcome (the server stores unknown kinds as generic
+    // files); only the size is checked client-side
     let uploading = false;
     const uploadMediaFiles = async (incoming: FileList | File[]) => {
       if (uploading) return;
       const files = [...incoming];
-      const rejected = files.filter((file) => !allowedMedia.test(file.name) || file.size > 25 * 1024 * 1024);
+      const rejected = files.filter((file) => !file.name.includes('.') || file.size > 25 * 1024 * 1024);
       const accepted = files.filter((file) => !rejected.includes(file));
       if (!accepted.length) {
-        setMediaStatus('Media must be PNG, JPG, PDF, or MP4 files up to 25 MB.', true);
+        setMediaStatus('Files need an extension and must be 25 MB or less.', true);
         return;
       }
       uploading = true;
