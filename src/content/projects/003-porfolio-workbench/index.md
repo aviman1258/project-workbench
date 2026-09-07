@@ -2,7 +2,7 @@
 id: "003"
 slug: porfolio-workbench
 name: Portfolio Workbench
-description: Portfolio Workbench is a static portfolio site built with Astro where each project is a Markdown file stored in Git, rendered with full validation at build time. It includes a local editor for creating and editing projects with device authentication, and a remote editor that commits changes back to GitHub for the deployed site. All project data, artifacts, and metadata live in version-controlled files without a database.
+description: "Portfolio Workbench is a Git-backed portfolio site built with Astro where each project is a Markdown file that gets validated and rendered at build time. It provides two editing interfaces: a local workbench with device authentication for offline editing, and a remote editor that commits changes to GitHub for the live site. All project data, artifacts, and metadata stay in version-controlled files without any database."
 why: I built this to keep my project records in Git—as plain Markdown and YAML files—rather than locked into a hosted service or database. As a site reliability engineer shipping side projects, I wanted a durable, diffable archive I could version-control, inspect by hand, and redeploy without migration pain. The local-only editor and passkey-based privacy controls let me document experiments and ideas end-to-end while staying selective about what's shareable, and the static build output means the portfolio itself stays simple and portable.
 status: dev
 privacy: public
