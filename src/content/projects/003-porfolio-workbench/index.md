@@ -8,8 +8,7 @@ status: dev
 privacy: public
 startDate: 2026-09-01
 updatedDate: 2026-09-07
-artifactOrder:
-  - how-portfolio-workbench-works.pdf
+artifactOrder: []
 featuredArtifact: portfolio-workbench-project-index.png
 repositoryUrl: https://github.com/aviman1258/project-workbench
 ---
