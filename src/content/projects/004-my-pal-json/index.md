@@ -2,8 +2,8 @@
 id: "004"
 slug: my-pal-json
 name: My Pal JSON
-description: My Pal JSON is a web-based tool for testing APIs and analyzing JSON responses with features like dynamic header management, request/response viewing, and JSON structure visualization. It can generate code models in six programming languages (C#, Python, JavaScript, C++, Java, Go) and includes dark/light theme switching.
-why: I built this project to eliminate the friction of context-switching between multiple tools when working with APIs—I found myself constantly moving JSON between my request client, a formatter, a structure inspector, and code generators. My Pal JSON consolidates all of these workflows into a single lightweight browser workspace, so I can send API requests, analyze responses, explore JSON structure, and generate code models without leaving the application. This unified approach saves time and keeps my focus on the actual API exploration rather than tool management.
+description: My Pal JSON is a web-based tool for testing APIs, sending requests with custom headers, and analyzing JSON responses. It visualizes JSON structure in a tree format and can generate code models in six programming languages (C#, Python, JavaScript, C++, Java, Go), with support for dark and light themes.
+why: I built this project to solve the inefficiency of constantly switching between separate tools when working with APIs. As a developer, I found myself juggling a request client, JSON formatter, structure inspector, and code generator—each context switch broke my focus and slowed down exploration. My Pal JSON consolidates these workflows into a single, lightweight browser-based workspace where I can send requests, inspect responses, analyze JSON structure, and generate models across multiple languages without ever leaving the application. It's a practical solution to a real friction point in API development.
 status: dev
 privacy: public
 startDate: 2024-10-03
