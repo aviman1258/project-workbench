@@ -9,7 +9,6 @@ privacy: public
 startDate: 2026-09-01
 updatedDate: 2026-09-07
 artifactOrder:
-  - ui-add-project-local-editor.png
   - ui-not-found-404.png
   - how-portfolio-workbench-works.pdf
 featuredArtifact: portfolio-workbench-project-index.png
