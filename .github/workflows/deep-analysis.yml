@@ -1,0 +1,60 @@
+name: Deep project analysis
+
+on:
+  push:
+    branches: [main]
+    paths: ['analysis-requests/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: deep-analysis
+  cancel-in-progress: false
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Find a pending request
+        id: scan
+        run: |
+          request=$(find analysis-requests -name '*.json' 2>/dev/null | head -1 || true)
+          if [ -n "$request" ] && ! grep -q '"status": *"failed"' "$request"; then
+            echo "request=$request" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.scan.outputs.request != ''
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.scan.outputs.request != ''
+        run: npm ci
+      - if: steps.scan.outputs.request != ''
+        run: npx playwright install --with-deps chromium
+      - name: Run the analysis
+        if: steps.scan.outputs.request != ''
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          REQUEST_PATH: ${{ steps.scan.outputs.request }}
+        run: node scripts/deep-analysis.mjs
+      - name: Commit results and redeploy
+        if: steps.scan.outputs.request != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "workbench-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "Deep analysis results"
+            for attempt in 1 2 3; do
+              git pull --rebase origin main && git push && break
+              sleep 5
+            done
+            gh workflow run deploy.yml
+          fi

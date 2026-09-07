@@ -47,9 +47,9 @@ const { id } = Astro.props;
   <dialog class="media-delete-dialog" data-vault-draft-dialog>
     <h3>Draft from the repository?</h3>
     <p>
-      The AI rewrites the <strong>description</strong> and <strong>why</strong> (using what's there as signal),
-      generates UI mockup images from the repository's code, builds a how-it-works PDF, and attaches them
-      as artifacts — all committed to the private vault automatically.
+      The AI rewrites the <strong>description</strong> and <strong>why</strong> now, then a deep analysis
+      runs in the background: it boots the app, takes real screenshots of every page, documents each control,
+      and attaches everything to the private vault — even if you close this page.
     </p>
     <p class="share-dialog__url" data-repo-draft-status></p>
     <div class="media-delete-dialog__actions">
@@ -73,7 +73,9 @@ const { id } = Astro.props;
   import { mimeFor } from '../lib/artifact-types';
   import { TOKEN_EVENT, deleteVaultFile, findVaultFolder, getStoredToken, getVaultFile, getVaultText, getVaultBlobUrl, listVaultArtifacts, putVaultFile } from '../lib/github-client';
   import { artifactKind, carouselHtml, renderPdfPreviews, wireCarousel, type CarouselArtifact } from '../lib/artifact-carousel';
-  import { applyFieldDisplay, ensureFieldPencils, makeFrontmatterPatcher, wireFieldPencils, wireRepoDraft, type EditorBackend } from '../lib/project-editor';
+  import { applyFieldDisplay, currentFieldValue, ensureFieldPencils, makeFrontmatterPatcher, resumeAnalysisWatch, wireFieldPencils, wireRepoDraft, type EditorBackend } from '../lib/project-editor';
+  import { analysisRequestPath } from '../lib/ai/analysis-status';
+  import { encodeText } from '../lib/github-client';
 
   const root = document.querySelector<HTMLElement>('[data-private-vault]');
   if (root) {
@@ -96,6 +98,28 @@ const { id } = Astro.props;
       getIndex: () => getVaultFile(vaultToken, `projects/${vaultFolder}/index.md`),
       putIndex: (content, message, sha) => putVaultFile(vaultToken, `projects/${vaultFolder}/index.md`, content, message, sha),
       putArtifact: (filename, base64, message) => putVaultFile(vaultToken, `projects/${vaultFolder}/artifacts/${filename}`, base64, message),
+      requestAnalysis: async () => {
+        const requestPath = analysisRequestPath(vaultFolder);
+        const request = JSON.stringify({
+          folder: vaultFolder,
+          repositoryUrl: currentFieldValue('repositoryUrl'),
+          pullRequestUrl: currentFieldValue('pullRequestUrl'),
+          requestedAt: new Date().toISOString(),
+        }, null, 2) + '\n';
+        let sha: string | undefined;
+        try { sha = (await getVaultFile(vaultToken, requestPath)).sha; } catch { /* first request */ }
+        await putVaultFile(vaultToken, requestPath, encodeText(request), `Request deep analysis for ${vaultFolder}`, sha);
+        return true;
+      },
+      readAnalysisRequest: async () => {
+        try {
+          const { text } = await getVaultFile(vaultToken, analysisRequestPath(vaultFolder));
+          const data = JSON.parse(text) as Record<string, string>;
+          return { exists: true, failed: data.status === 'failed' ? (data.error ?? 'unknown error') : undefined, requestedAt: data.requestedAt };
+        } catch {
+          return { exists: false };
+        }
+      },
       saveMessage: (label) => `Update private ${label}`,
       onSaved: () => { status.textContent = 'Saved to the private vault.'; },
       onAuthFailure: () => { /* the vault only renders after a working token */ },
@@ -274,6 +298,8 @@ const { id } = Astro.props;
         status.textContent = '';
         loaded = true;
         enableVaultEditing();
+        // a background analysis may already be running for this project
+        resumeAnalysisWatch(backend);
       } catch (error) {
         status.textContent = (error as Error).message || 'The private content could not be loaded.';
       }
@@ -296,8 +322,6 @@ const { id } = Astro.props;
       patch: patchVaultMeta,
       pill: draftPill,
       dialog: draftDialog,
-      afterArtifacts: (names) => loadMediaSettled(lastMediaCount + names.length),
-      doneMessage: (count) => `Done — text updated${count ? ` and ${count} artifacts attached` : ''}.`,
     });
 
     // unlock straight from the header connection — no separate panel here

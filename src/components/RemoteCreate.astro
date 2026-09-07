@@ -26,7 +26,7 @@ const today = new Date().toISOString().slice(0, 10);
             <input name="repositoryUrl" type="url" data-create-repo maxlength="500" placeholder="https://github.com/owner/repository" />
             <button type="button" class="media-add-button" data-create-ai disabled>✦ Draft from repository</button>
           </span>
-          <small>Without a repository, the project stays an Idea. Draft from repository fills the name, description, and why, and generates UI mockup images plus a how-it-works PDF as artifacts.</small>
+          <small>Without a repository, the project stays an Idea. Draft from repository fills the name, description, and why; creating the project then queues a background deep analysis that boots the app, takes real screenshots, and attaches a how-it-works report.</small>
         </label>
         <label class="field"><span>Pull request link (optional)</span><input name="pullRequestUrl" type="url" maxlength="500" placeholder="https://github.com/owner/repository/pull/123" /></label>
         <p class="form-status" data-create-ai-status aria-live="polite"></p>
@@ -83,12 +83,11 @@ const today = new Date().toISOString().slice(0, 10);
     const form = root.querySelector<HTMLFormElement>('[data-remote-create-form]')!;
     const status = root.querySelector<HTMLElement>('[data-remote-create-status]')!;
 
-    // --- AI: draft everything from the repository before creating ---
-    // Generated artifacts are stashed here and committed after Create.
+    // --- AI: draft the text now; the deep analysis is queued after Create ---
     const aiButton = root.querySelector<HTMLButtonElement>('[data-create-ai]')!;
     const aiStatus = root.querySelector<HTMLElement>('[data-create-ai-status]')!;
     const control = (name: string) => form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement;
-    let pendingArtifacts: { filename: string; base64: string }[] = [];
+    let wantAnalysis = false;
 
     const repoInput = control('repositoryUrl');
     const looksLikeRepo = () => /github\.com\/[^/]+\/[^/#?]+/.test(repoInput.value.trim());
@@ -178,30 +177,28 @@ const today = new Date().toISOString().slice(0, 10);
       const repositoryUrl = repoInput.value.trim();
       if (!looksLikeRepo()) return;
       aiButton.disabled = true;
-      pendingArtifacts = [];
       const progress = startDraftProgress();
       try {
         const nameInput = control('name');
         if (!nameInput.value.trim()) {
           nameInput.value = (repositoryUrl.split('/').pop() ?? '').replace(/[-_]+/g, ' ').trim();
         }
-        const result = await draftFromRepository(token, repositoryUrl, control('pullRequestUrl').value.trim(), {
+        await draftFromRepository(token, repositoryUrl, control('pullRequestUrl').value.trim(), {
           projectName: nameInput.value.trim() || 'this project',
           existingDescription: control('description').value,
           existingWhy: control('why').value,
-          existingArtifacts: [],
           status: progress.status,
           applyText: async ({ description, why }) => {
             control('description').value = description;
             control('why').value = why;
           },
-          addArtifact: async (filename, base64) => { pendingArtifacts.push({ filename, base64 }); },
+          // the project folder does not exist yet — the analysis is queued on Create
+          requestAnalysis: async () => { wantAnalysis = true; return false; },
         });
-        const summary = `Drafted. ${result.artifactNames.length ? `${result.artifactNames.length} generated artifacts are attached when you create the project. ` : ''}Edit anything before creating.`;
+        const summary = 'Drafted. When you create the project, a deep analysis (real screenshots + a how-it-works report) is queued in the background.';
         progress.done(summary);
         aiStatus.textContent = summary;
       } catch (error) {
-        pendingArtifacts = [];
         progress.fail((error as Error).message || 'The draft failed.');
         aiStatus.textContent = (error as Error).message || 'The draft failed.';
       } finally {
@@ -255,25 +252,27 @@ const today = new Date().toISOString().slice(0, 10);
           updatedDate: fields.startDate,
           ...(fields.repositoryUrl ? { repositoryUrl: fields.repositoryUrl } : {}),
           ...(fields.pullRequestUrl ? { pullRequestUrl: fields.pullRequestUrl } : {}),
-          ...(pendingArtifacts.length
-            ? {
-                artifactOrder: pendingArtifacts.map((a) => a.filename),
-                featuredArtifact: pendingArtifacts.find((a) => a.filename.endsWith('.png'))?.filename ?? pendingArtifacts[0].filename,
-              }
-            : {}),
         };
         const indexMd = serializeFrontmatter(metadata, '');
         await putFile(token, `src/content/projects/${folder}/index.md`, encodeText(indexMd), `Add ${fields.name} from the hosted editor`);
         await putFile(token, `src/content/projects/${folder}/artifacts/.gitkeep`, '', `Add artifacts folder for ${fields.name}`);
-        for (const artifact of pendingArtifacts) {
-          status.textContent = `Attaching ${artifact.filename}…`;
-          await putFile(token, `src/content/projects/${folder}/artifacts/${artifact.filename}`, artifact.base64, `Add generated artifact ${artifact.filename}`);
+        let analysisQueued = false;
+        if (wantAnalysis && fields.repositoryUrl) {
+          status.textContent = 'Queuing the deep analysis…';
+          const request = JSON.stringify({
+            folder,
+            repositoryUrl: fields.repositoryUrl,
+            pullRequestUrl: fields.pullRequestUrl,
+            requestedAt: new Date().toISOString(),
+          }, null, 2) + '\n';
+          await putFile(token, `analysis-requests/${folder}.json`, encodeText(request), `Request deep analysis for ${folder}`);
+          analysisQueued = true;
+          wantAnalysis = false;
         }
-        pendingArtifacts = [];
         form.reset();
         status.innerHTML = '';
         const note = document.createElement('span');
-        note.append('Created. The site rebuilds in about a minute — then it lives at ');
+        note.append(`Created.${analysisQueued ? ' A deep analysis is running in the background — real screenshots and a how-it-works report attach in a few minutes.' : ''} The site rebuilds in about a minute — then it lives at `);
         const link = document.createElement('a');
         link.href = `${projectsBase}/${slug}`;
         link.textContent = `${projectsBase}/${slug}`;

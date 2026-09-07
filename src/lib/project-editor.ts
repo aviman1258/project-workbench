@@ -11,6 +11,7 @@ import { openFieldEditor, type FieldSpec } from './field-editor';
 import { aiComplete, describeLastEvidence, gatherRepoContext } from './ai-complete';
 import { draftFromRepository } from './ai/repo-draft';
 import { startDraftProgress } from './ai/draft-progress';
+import { watchAnalysis, type AnalysisRequestState } from './ai/analysis-status';
 import { projectStatuses } from './project-schema';
 import { ICON_PENCIL } from './icons';
 
@@ -19,6 +20,10 @@ export interface EditorBackend {
   getIndex(): Promise<{ sha: string; text: string }>;
   putIndex(contentBase64: string, message: string, sha: string): Promise<unknown>;
   putArtifact(filename: string, base64: string, message: string): Promise<unknown>;
+  /** commit the background deep-analysis request file */
+  requestAnalysis(): Promise<boolean>;
+  /** current state of the request file — drives the progress widget */
+  readAnalysisRequest(): Promise<AnalysisRequestState>;
   /** commit message for a single-field save */
   saveMessage(label: string): string;
   onSaved(field: string): void;
@@ -168,9 +173,6 @@ export function wireRepoDraft(options: {
   dialog: HTMLDialogElement;
   /** gate before opening the confirm (public: require the token dialog) */
   beforeOpen?: () => boolean;
-  /** e.g. refresh the vault carousel after new artifacts landed */
-  afterArtifacts?: (names: string[]) => Promise<void>;
-  doneMessage: (count: number) => string;
 }) {
   const { backend, patch, pill, dialog } = options;
   const draftStatus = dialog.querySelector<HTMLElement>('[data-repo-draft-status]')!;
@@ -189,14 +191,11 @@ export function wireRepoDraft(options: {
     // the dialog's job is done — the floating researcher takes it from here
     dialog.close();
     const progress = startDraftProgress();
-    const existingArtifacts = [...document.querySelectorAll<HTMLElement>('[data-media-delete-trigger]')]
-      .map((trigger) => trigger.dataset.filename ?? '').filter(Boolean);
     try {
       const result = await draftFromRepository(backend.getToken(), currentFieldValue('repositoryUrl'), currentFieldValue('pullRequestUrl'), {
         projectName: currentFieldValue('name'),
         existingDescription: currentFieldValue('description'),
         existingWhy: currentFieldValue('why'),
-        existingArtifacts,
         status: progress.status,
         applyText: async ({ description, why }) => {
           await patch((metadata) => {
@@ -206,26 +205,27 @@ export function wireRepoDraft(options: {
           applyFieldDisplay('description', description);
           applyFieldDisplay('why', why);
         },
-        addArtifact: (filename, base64) => backend.putArtifact(filename, base64, `Add generated artifact ${filename}`).then(() => undefined),
+        requestAnalysis: () => backend.requestAnalysis(),
       });
-      if (result.artifactNames.length) {
-        progress.status('Recording the artifact order…');
-        await patch((metadata) => {
-          const order = Array.isArray(metadata.artifactOrder) ? (metadata.artifactOrder as string[]) : existingArtifacts;
-          metadata.artifactOrder = [...order, ...result.artifactNames.filter((name) => !order.includes(name))];
-          if (!metadata.featuredArtifact && !existingArtifacts.length) {
-            metadata.featuredArtifact = result.artifactNames.find((name) => name.endsWith('.png')) ?? result.artifactNames[0];
-          }
-        }, 'Add generated artifacts to the order');
-        if (options.afterArtifacts) {
-          progress.status('Refreshing the carousel…');
-          await options.afterArtifacts(result.artifactNames);
-        }
+      if (result.analysisRequested) {
+        // the same widget becomes the long-lived background-progress panel
+        watchAnalysis(() => backend.readAnalysisRequest(), progress);
+      } else {
+        progress.done('Done — description and why updated.');
       }
-      progress.done(options.doneMessage(result.artifactNames.length));
     } catch (error) {
       backend.onAuthFailure(error);
       progress.fail((error as Error).message || 'The draft failed.');
     }
   });
+}
+
+/** On page load: if a background analysis is pending for this project, show it. */
+export function resumeAnalysisWatch(backend: EditorBackend) {
+  void (async () => {
+    try {
+      const state = await backend.readAnalysisRequest();
+      if (state.exists) watchAnalysis(() => backend.readAnalysisRequest());
+    } catch { /* no pending request */ }
+  })();
 }

@@ -26,9 +26,9 @@ const { folder } = Astro.props;
 <dialog class="media-delete-dialog" data-repo-draft-dialog>
   <h3>Draft from the repository?</h3>
   <p>
-    The AI rewrites the <strong>description</strong> and <strong>why</strong> (using what's there as signal),
-    generates UI mockup images from the repository's code, builds a how-it-works PDF, and attaches them
-    as artifacts — all committed automatically.
+    The AI rewrites the <strong>description</strong> and <strong>why</strong> now, then a deep analysis
+    runs in the background: it boots the app, takes real screenshots of every page, documents each control,
+    and attaches the screenshots plus a how-it-works report — even if you close this page.
   </p>
   <p class="share-dialog__url" data-repo-draft-status></p>
   <div class="media-delete-dialog__actions">
@@ -38,8 +38,9 @@ const { folder } = Astro.props;
 </dialog>
 
 <script>
-  import { TOKEN_EVENT, getFile, getStoredToken, putFile, deleteFile } from '../lib/github-client';
-  import { applyFieldDisplay, currentFieldValue, makeFrontmatterPatcher, wireFieldPencils, wireRepoDraft, type EditorBackend } from '../lib/project-editor';
+  import { TOKEN_EVENT, encodeText, getFile, getStoredToken, putFile, deleteFile } from '../lib/github-client';
+  import { currentFieldValue, makeFrontmatterPatcher, resumeAnalysisWatch, wireFieldPencils, wireRepoDraft, type EditorBackend } from '../lib/project-editor';
+  import { analysisRequestPath } from '../lib/ai/analysis-status';
 
   const root = document.querySelector<HTMLElement>('[data-remote-editor]');
   if (root) {
@@ -63,11 +64,33 @@ const { folder } = Astro.props;
       }
     };
 
+    const requestPath = analysisRequestPath(folder);
     const backend: EditorBackend = {
       getToken: () => token,
       getIndex: () => getFile(token, indexPath),
       putIndex: (content, message, sha) => putFile(token, indexPath, content, message, sha),
       putArtifact: (filename, base64, message) => putFile(token, `src/content/projects/${folder}/artifacts/${filename}`, base64, message),
+      requestAnalysis: async () => {
+        const request = JSON.stringify({
+          folder,
+          repositoryUrl: currentFieldValue('repositoryUrl'),
+          pullRequestUrl: currentFieldValue('pullRequestUrl'),
+          requestedAt: new Date().toISOString(),
+        }, null, 2) + '\n';
+        let sha: string | undefined;
+        try { sha = (await getFile(token, requestPath)).sha; } catch { /* first request */ }
+        await putFile(token, requestPath, encodeText(request), `Request deep analysis for ${folder}`, sha);
+        return true;
+      },
+      readAnalysisRequest: async () => {
+        try {
+          const { text } = await getFile(token, requestPath);
+          const data = JSON.parse(text) as Record<string, string>;
+          return { exists: true, failed: data.status === 'failed' ? (data.error ?? 'unknown error') : undefined, requestedAt: data.requestedAt };
+        } catch {
+          return { exists: false };
+        }
+      },
       saveMessage: (label) => `Update ${label} from the hosted editor`,
       onSaved: () => setStatus('Saved. The site rebuilds in about a minute.'),
       onAuthFailure: handleAuthFailure,
@@ -76,6 +99,9 @@ const { folder } = Astro.props;
 
     // --- inline field editing via themed modals ---
     wireFieldPencils(backend, patchFrontmatter, { requireToken });
+
+    // a background analysis may already be running for this project
+    if (token) resumeAnalysisWatch(backend);
 
     // --- fixed "Draft from repo" pill: one confirm, then everything applies ---
     const draftPill = document.querySelector<HTMLButtonElement>('[data-repo-draft]');
@@ -90,7 +116,6 @@ const { folder } = Astro.props;
         pill: draftPill,
         dialog: draftDialog,
         beforeOpen: requireToken,
-        doneMessage: (count) => `Done — text updated${count ? `, ${count} artifacts committed. They appear in the carousel after the site rebuilds (~1 min)` : ''}.`,
       });
     }
 
