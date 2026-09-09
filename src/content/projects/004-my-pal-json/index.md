@@ -8,7 +8,7 @@ status: dev
 privacy: public
 startDate: 2024-10-03
 updatedDate: 2026-09-09
-featuredArtifact: mypaljson2-20260902055735.png
+featuredArtifact: page-home.png
 repositoryUrl: https://github.com/aviman1258/my-pal-json
 artifactOrder:
   - mypaljson-20260902055709.png
