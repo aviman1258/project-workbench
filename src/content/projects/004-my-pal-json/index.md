@@ -11,7 +11,6 @@ updatedDate: 2026-09-09
 featuredArtifact: page-home.png
 repositoryUrl: https://github.com/aviman1258/my-pal-json
 artifactOrder:
-  - mypaljson-20260902055709.png
   - page-home.png
   - how-it-works.pdf
 ---
