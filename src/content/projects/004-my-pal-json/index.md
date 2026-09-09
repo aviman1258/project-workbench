@@ -2,12 +2,12 @@
 id: "004"
 slug: my-pal-json
 name: My Pal JSON
-description: My Pal JSON is a web-based tool for testing APIs, sending requests with custom headers, and analyzing JSON responses. It visualizes JSON structure in a tree format and can generate code models in six programming languages (C#, Python, JavaScript, C++, Java, Go), with support for dark and light themes.
-why: I built this project to solve the inefficiency of constantly switching between separate tools when working with APIs. As a developer, I found myself juggling a request client, JSON formatter, structure inspector, and code generator—each context switch broke my focus and slowed down exploration. My Pal JSON consolidates these workflows into a single, lightweight browser-based workspace where I can send requests, inspect responses, analyze JSON structure, and generate models across multiple languages without ever leaving the application. It's a practical solution to a real friction point in API development.
+description: My Pal JSON is a browser-based API client that stores request collections in Git repositories, lets you send API calls and analyze JSON responses, and generates model classes in six programming languages. It runs locally so your localhost APIs and secrets never leave your machine, and supports chaining requests together with variable passing between responses.
+why: "I built this project to eliminate the friction of context-switching between multiple tools during API development. As someone who constantly moved between a request client, JSON formatter, structure inspector, and code generator, I realized each context switch broke my focus and slowed down exploration—so I set out to consolidate all these workflows into a single lightweight browser application. What started as a productivity fix evolved into something more interesting: a workspace that runs entirely locally, integrates with git repositories to sync API collections with teammates using Postman, and chains requests together visually to simulate complex API flows. I wanted to prove that the right tool design could make API exploration feel seamless rather than fragmented."
 status: dev
 privacy: public
 startDate: 2024-10-03
-updatedDate: 2026-09-07
+updatedDate: 2026-09-09
 featuredArtifact: mypaljson2-20260902055735.png
 repositoryUrl: https://github.com/aviman1258/my-pal-json
 artifactOrder:
