@@ -2,5 +2,9 @@
   "folder": "005-tour-guide",
   "repositoryUrl": "https://github.com/aviman1258/tour-guide",
   "pullRequestUrl": "",
-  "requestedAt": "2026-09-22T03:05:53.844Z"
+  "requestedAt": "2026-09-22T03:05:53.844Z",
+  "status": "done",
+  "finishedAt": "2026-09-22T03:09:15.111Z",
+  "artifacts": 7,
+  "booted": true
 }
