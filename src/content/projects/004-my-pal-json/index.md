@@ -4,10 +4,10 @@ slug: my-pal-json
 name: My Pal JSON
 description: My Pal JSON is a browser-based API client that stores request collections in Git repositories, lets you send API calls and analyze JSON responses, and generates model classes in six programming languages. It runs locally so your localhost APIs and secrets never leave your machine, and supports chaining requests together with variable passing between responses.
 why: "I built this project to eliminate the friction of context-switching between multiple tools during API development. As someone who constantly moved between a request client, JSON formatter, structure inspector, and code generator, I realized each context switch broke my focus and slowed down exploration—so I set out to consolidate all these workflows into a single lightweight browser application. What started as a productivity fix evolved into something more interesting: a workspace that runs entirely locally, integrates with git repositories to sync API collections with teammates using Postman, and chains requests together visually to simulate complex API flows. I wanted to prove that the right tool design could make API exploration feel seamless rather than fragmented."
-status: dev
+status: delivered
 privacy: public
 startDate: 2024-10-03
-updatedDate: 2026-09-09
+updatedDate: 2026-09-27
 featuredArtifact: page-home.png
 repositoryUrl: https://github.com/aviman1258/my-pal-json
 artifactOrder:
