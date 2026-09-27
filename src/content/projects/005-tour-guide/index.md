@@ -12,9 +12,11 @@ repositoryUrl: https://github.com/aviman1258/tour-guide
 artifactOrder:
   - page-home.png
   - page-plan-html.png
+  - page-routes.png
   - page-drive-html.png
   - page-terms-html.png
   - page-privacy-html.png
+  - page-index-html.png
   - how-it-works.pdf
 featuredArtifact: page-home.png
 ---
