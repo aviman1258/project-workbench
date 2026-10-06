@@ -445,6 +445,16 @@ a {
   white-space: nowrap;
 }
 
+.work-intro {
+  margin: 14px 0 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+.work-intro strong {
+  color: var(--ink);
+}
+
 .project-grid {
   margin-top: 26px;
   display: grid;

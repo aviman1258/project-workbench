@@ -106,7 +106,7 @@ export function applyFieldDisplay(field: string, value: string) {
     display.innerHTML = linkify(value);
   } else {
     display.textContent = value;
-    if (field === 'name') document.title = `${value} · Avishek's Portfolio`;
+    if (field === 'name') document.title = `${value} · Avishek Chandra`;
   }
 }
 

@@ -5,14 +5,32 @@ import { publicOnlyBuild, withBase } from '../lib/projects';
 interface Props {
   title?: string;
   description?: string;
+  /** keep this page out of search engines (private projects, utility pages) */
+  noindex?: boolean;
 }
 
 const {
-  title = "Avishek's Portfolio",
-  description = 'A private, local-first record of product ideas, experiments, and shipped work.',
+  title,
+  description = 'The project portfolio of Avishek Chandra, a senior software engineer: product ideas, experiments, and shipped work.',
+  noindex = false,
 } = Astro.props;
-const pageTitle = title === "Avishek's Portfolio" ? title : `${title} · Avishek's Portfolio`;
+const pageTitle = title ? `${title} · Avishek Chandra` : 'Avishek Chandra — Project Portfolio';
 const avatar = withBase('/profile-avatar-circle.png');
+const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : '';
+const avatarAbsolute = Astro.site ? new URL(avatar, Astro.site).href : avatar;
+// Structured data so search engines connect the site to the person by name.
+const personLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Person',
+  name: 'Avishek Chandra',
+  url: Astro.site?.href ?? 'https://www.avisheksportfolio.com/',
+  image: avatarAbsolute,
+  jobTitle: 'Senior Software Engineer',
+  sameAs: [
+    'https://github.com/aviman1258',
+    'https://www.credly.com/users/avishek-chandra.d94e59c9',
+  ],
+};
 
 // Business card shown when the avatar is tapped.
 const CARD = {
@@ -42,7 +60,16 @@ const CARD = {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
     <meta name="description" content={description} />
-    <meta name="robots" content="noindex, nofollow" />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
+    {canonical && <link rel="canonical" href={canonical} />}
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Avishek Chandra — Project Portfolio" />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    {canonical && <meta property="og:url" content={canonical} />}
+    <meta property="og:image" content={avatarAbsolute} />
+    <meta name="twitter:card" content="summary" />
+    <script type="application/ld+json" set:html={JSON.stringify(personLd)} />
     <meta name="theme-color" content="#0b0f17" />
     <link rel="icon" href={`${avatar}?v=3`} type="image/png" sizes="any" />
     <link rel="shortcut icon" href={`${avatar}?v=3`} type="image/png" />

@@ -33,7 +33,7 @@ const inlineEditable = publicOnlyBuild && !privateProject;
 const pencil = ICON_PENCIL;
 ---
 
-<BaseLayout title={data.name} description={data.description}>
+<BaseLayout title={data.name} description={privateProject ? undefined : data.description} noindex={privateProject}>
   <div class="page-shell project-page">
     <a class="back-link" href={withBase('/')}>← Portfolio index</a>
 
