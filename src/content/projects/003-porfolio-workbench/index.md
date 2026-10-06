@@ -2,14 +2,22 @@
 id: "003"
 slug: porfolio-workbench
 name: Portfolio Workbench
-description: "Portfolio Workbench is a Git-backed portfolio site built with Astro where each project is a Markdown file validated and rendered at build time. It provides two editing interfaces: a local workbench with device authentication for offline editing, and a remote editor that commits changes to GitHub for the live site. All project data, artifacts, and metadata stay in version-controlled files without any database."
-why: I built this to keep my project records in Git—as plain Markdown and YAML files—rather than locked into a hosted service or database. As a senior software engineer shipping side projects, I wanted a durable, diffable archive I could version-control, inspect by hand, and redeploy without migration pain. The local-only editor and passkey-based privacy controls let me document experiments and ideas end-to-end while staying selective about what's shareable, and the static build output means the portfolio itself stays simple and portable.
+description: Portfolio Workbench, live at https://www.avisheksportfolio.com, is a portfolio site where every project is a Markdown + YAML file in Git rather than a row in a database. Astro renders a homepage carousel of projects and a detail page per project, and the same codebase supports editing — locally via a device-unlocked (WebAuthn) workbench, or on the hosted site via a GitHub personal-access token that commits edits straight to the repo. It also includes an AI "Draft from repository" feature that reads a linked GitHub repo/PR, writes the description and why, and queues a background CI job that boots the app, screenshots every page, and documents it — producing exactly this kind of page-by-page report.
+why: I built this because I was tired of my project history living wherever some hosted tool decided to keep it — I wanted my portfolio's actual data to be plain files I could diff, inspect, and move without migration pain. As a senior engineer who ships a lot of side projects, I wanted one place to record not just what I built but why, with enough structure (status, privacy, artifacts) to make the record useful later. I added the device-unlock and GitHub-token editing paths so I could edit from either my laptop or my phone without standing up a backend, and I added the AI drafting and deep-analysis pipeline because writing (and re-writing) descriptions and documentation by hand for every project was the actual bottleneck.
 status: delivered
 privacy: public
 startDate: 2026-09-01
-updatedDate: 2026-09-07
+updatedDate: 2026-10-06
 repositoryUrl: https://github.com/aviman1258/project-workbench
 siteUrl: https://www.avisheksportfolio.com
+artifactOrder:
+  - page-home.png
+  - page-manage.png
+  - page-projects-my-pal-json.png
+  - page-projects-tour-guide.png
+  - page-projects-porfolio-workbench.png
+  - how-it-works.pdf
+featuredArtifact: page-home.png
 ---
 
 ## What I Built
