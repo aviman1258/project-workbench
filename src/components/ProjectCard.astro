@@ -13,6 +13,8 @@ const artifacts = await loadArtifacts(project);
 const hero = featuredArtifact(project, artifacts);
 const searchValue = [data.name, data.description, data.why].join(' ').toLowerCase();
 const privateProject = data.privacy === 'private';
+const excerpt = data.description.length > 150 ? `${data.description.slice(0, 150).trimEnd()}…` : data.description;
+const updated = data.updatedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 ---
 
 <article
@@ -56,4 +58,9 @@ const privateProject = data.privacy === 'private';
       <span aria-hidden="true">□</span><strong>No artifacts yet</strong>
     </a>
   )}
+
+  {!privateProject && (
+    <p class="project-card__excerpt">{excerpt}</p>
+  )}
+  <p class="project-card__meta">Updated {updated}</p>
 </article>

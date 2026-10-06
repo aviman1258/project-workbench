@@ -43,7 +43,7 @@ const CARD = {
     <meta name="viewport" content="width=device-width" />
     <meta name="description" content={description} />
     <meta name="robots" content="noindex, nofollow" />
-    <meta name="theme-color" content="#e9e6da" />
+    <meta name="theme-color" content="#0b0f17" />
     <link rel="icon" href={`${avatar}?v=3`} type="image/png" sizes="any" />
     <link rel="shortcut icon" href={`${avatar}?v=3`} type="image/png" />
     <link rel="apple-touch-icon" href={`${avatar}?v=3`} />
@@ -87,7 +87,7 @@ const CARD = {
       <slot />
     </main>
     <footer class="site-footer">
-      <p>Markdown is the record. Git is the history. This interface is the view.</p>
+      <p>© {new Date().getFullYear()} Avishek Chandra</p>
     </footer>
 
     {publicOnlyBuild && (

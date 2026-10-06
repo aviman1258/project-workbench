@@ -11,20 +11,7 @@ const projects = aliveProjects(await getCollection('projects'))
   <div class="page-shell home-page">
     <section class="work-section" aria-labelledby="work-heading">
       <div class="section-heading section-heading--carousel">
-        <div><p class="eyebrow">Portfolio index</p><h2 id="work-heading">The project reel.</h2></div>
-      </div>
-      <div class="project-coverflow" data-project-coverflow tabindex="0" aria-label="Project carousel. Use the arrow keys or controls to browse projects.">
-        <div class="project-coverflow__stage" data-project-grid>{projects.map((project) => <ProjectCard project={project} />)}</div>
-        <div class="project-coverflow__navigation">
-          <button type="button" data-project-coverflow-previous aria-label="Show previous project"><span aria-hidden="true">←</span></button>
-          <div class="project-coverflow__position" aria-live="polite"><strong data-project-coverflow-current>1</strong><span>/</span><span data-project-coverflow-total>{projects.length}</span></div>
-          <div class="project-coverflow__dots" aria-label="Choose a project">
-            {projects.map((project, index) => (
-              <button type="button" data-project-coverflow-dot data-project-id={project.data.id} data-active={index === 0 ? 'true' : 'false'} aria-label={`Show ${project.data.name}`} aria-current={index === 0 ? 'true' : undefined}></button>
-            ))}
-          </div>
-          <button type="button" data-project-coverflow-next aria-label="Show next project"><span aria-hidden="true">→</span></button>
-        </div>
+        <div><p class="eyebrow">Portfolio index</p><h2 id="work-heading">The build log.</h2></div>
       </div>
 
       <div class="filter-panel" aria-label="Filter projects">
@@ -36,6 +23,8 @@ const projects = aliveProjects(await getCollection('projects'))
         </div>
         <button class="reset-filters" type="button" data-reset-filters hidden>Clear filters</button>
       </div>
+
+      <div class="project-grid" data-project-grid>{projects.map((project) => <ProjectCard project={project} />)}</div>
 
       <aside class="private-unlock-panel" data-private-unlock-panel hidden aria-labelledby="private-unlock-title">
         <span class="private-unlock-panel__icon" aria-hidden="true">
@@ -62,92 +51,11 @@ const projects = aliveProjects(await getCollection('projects'))
   const emptyState = document.querySelector<HTMLElement>('[data-empty-results]');
   const resetButton = document.querySelector<HTMLButtonElement>('[data-reset-filters]');
   const emptyReset = document.querySelector<HTMLButtonElement>('[data-empty-reset]');
-  const projectGrid = document.querySelector<HTMLElement>('[data-project-grid]');
   const unlockPanel = document.querySelector<HTMLElement>('[data-private-unlock-panel]');
   const unlockButton = document.querySelector<HTMLButtonElement>('[data-private-unlock-button]');
   const unlockStatus = document.querySelector<HTMLElement>('[data-private-unlock-status]');
   let pendingPrivateUrl = '';
   let unlockInProgress = false;
-  const projectCoverflow = document.querySelector<HTMLElement>('[data-project-coverflow]');
-  const coverflowCurrent = document.querySelector<HTMLElement>('[data-project-coverflow-current]');
-  const coverflowTotal = document.querySelector<HTMLElement>('[data-project-coverflow-total]');
-  const coverflowDots = [...document.querySelectorAll<HTMLButtonElement>('[data-project-coverflow-dot]')];
-  let activeCoverflowCard: HTMLElement | null = cards[0] ?? null;
-
-  const visibleCoverflowCards = () => projectGrid
-    ? [...projectGrid.querySelectorAll<HTMLElement>('[data-project-card]')].filter((card) => !card.hidden)
-    : [];
-
-  function showCoverflowCard(next: number | HTMLElement) {
-    const visibleCards = visibleCoverflowCards();
-    if (!visibleCards.length) {
-      if (projectCoverflow) projectCoverflow.hidden = true;
-      return;
-    }
-    if (projectCoverflow) projectCoverflow.hidden = false;
-    const requested = typeof next === 'number'
-      ? visibleCards[(next + visibleCards.length) % visibleCards.length]
-      : next;
-    activeCoverflowCard = visibleCards.includes(requested) ? requested : visibleCards[0];
-    const currentIndex = Math.max(0, visibleCards.indexOf(activeCoverflowCard));
-
-    cards.forEach((card) => {
-      let position = 'hidden';
-      if (!card.hidden) {
-        const index = visibleCards.indexOf(card);
-        const previousIndex = (currentIndex - 1 + visibleCards.length) % visibleCards.length;
-        const nextIndex = (currentIndex + 1) % visibleCards.length;
-        position = index === currentIndex ? 'active' : index === previousIndex ? 'previous' : index === nextIndex ? 'next' : 'hidden';
-        if (visibleCards.length === 2 && index !== currentIndex) position = 'next';
-      }
-      card.dataset.coverflowPosition = position;
-      card.setAttribute('aria-hidden', String(position !== 'active'));
-      card.inert = position !== 'active';
-    });
-
-    if (coverflowCurrent) coverflowCurrent.textContent = String(currentIndex + 1).padStart(2, '0');
-    if (coverflowTotal) coverflowTotal.textContent = String(visibleCards.length).padStart(2, '0');
-    coverflowDots.forEach((dot) => {
-      const card = cards.find((candidate) => candidate.dataset.projectId === dot.dataset.projectId);
-      dot.hidden = !card || card.hidden;
-      const active = card === activeCoverflowCard;
-      dot.dataset.active = String(active);
-      if (active) dot.setAttribute('aria-current', 'true');
-      else dot.removeAttribute('aria-current');
-    });
-  }
-
-  function moveCoverflow(direction: number) {
-    const visibleCards = visibleCoverflowCards();
-    if (!visibleCards.length) return;
-    const currentIndex = Math.max(0, visibleCards.indexOf(activeCoverflowCard ?? visibleCards[0]));
-    showCoverflowCard(currentIndex + direction);
-  }
-
-  projectCoverflow?.querySelector('[data-project-coverflow-previous]')?.addEventListener('click', () => moveCoverflow(-1));
-  projectCoverflow?.querySelector('[data-project-coverflow-next]')?.addEventListener('click', () => moveCoverflow(1));
-  projectCoverflow?.addEventListener('keydown', (event) => {
-    if (event.key === 'ArrowLeft') { event.preventDefault(); moveCoverflow(-1); }
-    if (event.key === 'ArrowRight') { event.preventDefault(); moveCoverflow(1); }
-  });
-  // swipe left/right on touch devices; vertical scrolling stays untouched
-  let coverflowTouchX = 0;
-  let coverflowTouchY = 0;
-  projectCoverflow?.addEventListener('touchstart', (event) => {
-    coverflowTouchX = event.changedTouches[0]?.clientX ?? 0;
-    coverflowTouchY = event.changedTouches[0]?.clientY ?? 0;
-  }, { passive: true });
-  projectCoverflow?.addEventListener('touchend', (event) => {
-    const deltaX = (event.changedTouches[0]?.clientX ?? coverflowTouchX) - coverflowTouchX;
-    const deltaY = (event.changedTouches[0]?.clientY ?? coverflowTouchY) - coverflowTouchY;
-    if (Math.abs(deltaX) > 44 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
-      moveCoverflow(deltaX < 0 ? 1 : -1);
-    }
-  }, { passive: true });
-  coverflowDots.forEach((dot) => dot.addEventListener('click', () => {
-    const card = cards.find((candidate) => candidate.dataset.projectId === dot.dataset.projectId);
-    if (card) showCoverflowCard(card);
-  }));
 
   function showUnlockPanel(targetUrl: string) {
     pendingPrivateUrl = targetUrl;
@@ -204,7 +112,6 @@ const projects = aliveProjects(await getCollection('projects'))
     });
     if (emptyState) emptyState.hidden = visible !== 0;
     if (resetButton) resetButton.hidden = !query;
-    showCoverflowCard(activeCoverflowCard ?? 0);
   }
 
   function resetFilters() {
@@ -216,5 +123,4 @@ const projects = aliveProjects(await getCollection('projects'))
   searchInput?.addEventListener('input', applyFilters);
   resetButton?.addEventListener('click', resetFilters);
   emptyReset?.addEventListener('click', resetFilters);
-  showCoverflowCard(0);
 </script>

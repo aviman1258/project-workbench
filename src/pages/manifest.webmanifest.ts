@@ -13,8 +13,8 @@ export const GET: APIRoute = () =>
       start_url: withBase('/'),
       scope: withBase('/'),
       display: 'standalone',
-      background_color: '#e9e6da',
-      theme_color: '#e9e6da',
+      background_color: '#0b0f17',
+      theme_color: '#0b0f17',
       icons: [
         { src: withBase('/icons/icon-192.png'), sizes: '192x192', type: 'image/png', purpose: 'any' },
         { src: withBase('/icons/icon-512.png'), sizes: '512x512', type: 'image/png', purpose: 'any' },
