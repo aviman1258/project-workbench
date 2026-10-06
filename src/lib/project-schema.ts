@@ -17,6 +17,7 @@ export const projectMetadataSchema = z.object({
   featuredArtifact: z.string().min(1).optional(),
   repositoryUrl: z.string().url().optional(),
   pullRequestUrl: z.string().url().optional(),
+  siteUrl: z.string().url().optional(),
   // soft delete: the record stays in git, the site stops rendering it
   deleted: z.boolean().optional(),
 });

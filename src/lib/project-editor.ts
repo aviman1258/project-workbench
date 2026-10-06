@@ -14,6 +14,7 @@ import { startDraftProgress } from './ai/draft-progress';
 import { watchAnalysis, type AnalysisRequestState } from './ai/analysis-status';
 import { projectStatuses } from './project-schema';
 import { ICON_PENCIL } from './icons';
+import { linkify } from './linkify';
 
 export interface EditorBackend {
   getToken(): string;
@@ -40,6 +41,7 @@ export const PROJECT_FIELDS: Record<string, FieldSpec> = {
   startDate: { kind: 'date', label: 'start date' },
   repositoryUrl: { kind: 'url', label: 'repository link' },
   pullRequestUrl: { kind: 'url', label: 'pull request link' },
+  siteUrl: { kind: 'url', label: 'live site link' },
 };
 
 export type FrontmatterPatch = (mutate: (metadata: Record<string, unknown>) => void, message: string) => Promise<void>;
@@ -86,7 +88,7 @@ export function applyFieldDisplay(field: string, value: string) {
   } else if (field === 'startDate') {
     display.dataset.value = value;
     display.textContent = new Date(`${value}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  } else if (field === 'repositoryUrl' || field === 'pullRequestUrl') {
+  } else if (field === 'repositoryUrl' || field === 'pullRequestUrl' || field === 'siteUrl') {
     display.dataset.value = value;
     display.replaceChildren();
     if (value) {
@@ -99,6 +101,9 @@ export function applyFieldDisplay(field: string, value: string) {
     } else {
       display.textContent = '—';
     }
+  } else if (field === 'description') {
+    // the description may mention the live site — keep URLs clickable
+    display.innerHTML = linkify(value);
   } else {
     display.textContent = value;
     if (field === 'name') document.title = `${value} · Avishek's Portfolio`;

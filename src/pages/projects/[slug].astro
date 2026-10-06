@@ -9,6 +9,7 @@ import ProjectDelete from '../../components/ProjectDelete.astro';
 import { privacyLevels, projectStatuses } from '../../lib/project-schema';
 import { ICON_PENCIL } from '../../lib/icons';
 import { carouselHtml } from '../../lib/artifact-carousel';
+import { linkify } from '../../lib/linkify';
 
 export async function getStaticPaths() {
   // Private projects build too: in public deploys they are generated locked stubs.
@@ -44,7 +45,7 @@ const pencil = ICON_PENCIL;
           {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="name" aria-label="Edit the name" set:html={pencil} />}
         </div>
         <div class="inline-editable">
-          <p data-field-display="description">{data.description}</p>
+          <p data-field-display="description" set:html={linkify(data.description)} />
           {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="description" aria-label="Edit the description" set:html={pencil} />}
         </div>
       </div>
@@ -86,6 +87,15 @@ const pencil = ICON_PENCIL;
             {data.pullRequestUrl ? <a href={data.pullRequestUrl} target="_blank" rel="noreferrer">{data.pullRequestUrl.replace(/^https:\/\/(www\.)?/, '')}</a> : '—'}
           </span>
           {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="pullRequestUrl" aria-label="Edit the pull request link" set:html={pencil} />}
+        </dd>
+      </div>
+      <div>
+        <dt>Live site</dt>
+        <dd class="inline-editable">
+          <span data-field-display="siteUrl" data-value={data.siteUrl ?? ''}>
+            {data.siteUrl ? <a href={data.siteUrl} target="_blank" rel="noreferrer">{data.siteUrl.replace(/^https:\/\/(www\.)?/, '')}</a> : '—'}
+          </span>
+          {inlineEditable && <button type="button" class="inline-edit" data-inline-edit="siteUrl" aria-label="Edit the live site link" set:html={pencil} />}
         </dd>
       </div>
     </dl>

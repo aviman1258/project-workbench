@@ -23,10 +23,12 @@ jobs:
       - name: Find a pending request
         id: scan
         run: |
-          request=$(find analysis-requests -name '*.json' 2>/dev/null | head -1 || true)
-          if [ -n "$request" ] && ! grep -q '"status"' "$request"; then
-            echo "request=$request" >> "$GITHUB_OUTPUT"
-          fi
+          for f in $(find analysis-requests -name '*.json' 2>/dev/null | sort); do
+            if ! grep -q '"status"' "$f"; then
+              echo "request=$f" >> "$GITHUB_OUTPUT"
+              break
+            fi
+          done
       - uses: actions/setup-node@v4
         if: steps.scan.outputs.request != ''
         with:
@@ -58,3 +60,10 @@ jobs:
             done
             gh workflow run deploy.yml
           fi
+          # more requests queued? process the next one (a bot push won't retrigger us)
+          for f in $(find analysis-requests -name '*.json' 2>/dev/null | sort); do
+            if ! grep -q '"status"' "$f"; then
+              gh workflow run deep-analysis.yml
+              break
+            fi
+          done

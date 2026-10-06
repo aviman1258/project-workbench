@@ -220,6 +220,11 @@ Be thorough and specific. Trace behavior to the actual code (handlers, routes, f
 
 Reply EXACTLY in this format (no markdown fences):
 
+SITEURL: <the app's live/production URL if the evidence shows one (README, homepage, config), else none>
+DESCRIPTION:
+<2-4 sentences describing what this app does, written fresh from the evidence — concrete and plain-English, no marketing fluff. If the app has a live site, the description MUST include its URL.>
+WHY:
+<2-4 first-person sentences ("I built this…") on why this was built — the problem, curiosity, or need behind it. The author is Avishek Chandra, a senior software engineer who builds side projects to explore ideas end to end. Ground it in the evidence; you may draw on general knowledge of developers and the world to make the motivation plausible and human.>
 OVERVIEW:
 <3-5 paragraphs: what the app is, who it is for, how it works end to end>
 ARCHITECTURE:
@@ -229,13 +234,12 @@ PURPOSE: <one or two sentences>
 WALKTHROUGH:
 <a paragraph walking a user through this page>
 CTAS:
-- <control label> :: <what it does, traced to the code — name the handler/route when identifiable>
-- <one line per interactive control worth documenting>
+- <control or field label> :: <what it does, traced to the code — name the handler/route when identifiable>
 === END PAGE
 
-Repeat the PAGE block for every crawled page, in the order given.`;
+Repeat the PAGE block for every crawled page, in the order given. In CTAS, document EVERY interactive control and EVERY input field on the page — buttons, links, dropdowns, text fields, toggles — one line each. For fields, say what the value is used for and any validation. Exhaustive beats brief.`;
 
-async function analyze(evidence, crawl, projectName) {
+async function analyze(evidence, crawl, projectName, knownSiteUrl) {
   const client = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
     ...(process.env.ANTHROPIC_BASE_URL ? { baseURL: process.env.ANTHROPIC_BASE_URL } : {}),
@@ -247,11 +251,11 @@ async function analyze(evidence, crawl, projectName) {
   // streamed: a thorough reply can take several minutes
   const stream = client.messages.stream({
     model: MODEL,
-    max_tokens: 24_000,
+    max_tokens: 32_000,
     system: ANALYSIS_SYSTEM,
     messages: [{
       role: 'user',
-      content: `Project: ${projectName}\n\nLive crawl of the running app:\n${crawlText}\n\nSource evidence:\n${evidence}`,
+      content: `Project: ${projectName}\n${knownSiteUrl ? `Known live site (authoritative — use it): ${knownSiteUrl}\n` : ''}\nLive crawl of the running app:\n${crawlText}\n\nSource evidence:\n${evidence}`,
     }],
   });
   const response = await stream.finalMessage();
@@ -259,8 +263,14 @@ async function analyze(evidence, crawl, projectName) {
 }
 
 function parseAnalysis(text) {
-  const overview = /OVERVIEW:\s*\n([\s\S]*?)(?=\nARCHITECTURE:|\n=== PAGE:|$)/.exec(text)?.[1]?.trim() ?? '';
-  const architecture = /ARCHITECTURE:\s*\n([\s\S]*?)(?=\n=== PAGE:|$)/.exec(text)?.[1]?.trim() ?? '';
+  const grab = (name, next) => new RegExp(`${name}:\\s*\\n?([\\s\\S]*?)(?=\\n(?:${next.join('|')}):|\\n=== PAGE:|$)`).exec(text)?.[1]?.trim() ?? '';
+  const siteUrlRaw = /^SITEURL:\s*(.+)$/m.exec(text)?.[1]?.trim() ?? '';
+  const siteUrl = /^https?:\/\//.test(siteUrlRaw) ? siteUrlRaw
+    : /^(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)+/i.test(siteUrlRaw) ? `https://${siteUrlRaw}` : '';
+  const description = grab('DESCRIPTION', ['WHY', 'OVERVIEW', 'ARCHITECTURE']);
+  const why = grab('WHY', ['OVERVIEW', 'ARCHITECTURE']);
+  const overview = grab('OVERVIEW', ['ARCHITECTURE']);
+  const architecture = grab('ARCHITECTURE', ['NEVERMATCHES']);
   const pages = [];
   for (const block of text.split(/^=== PAGE:/m).slice(1)) {
     const pagePath = block.split('\n')[0]?.trim() ?? '';
@@ -271,7 +281,7 @@ function parseAnalysis(text) {
       .map((l) => { const [label, ...rest] = l.split('::'); return { label: label.trim(), behavior: rest.join('::').trim() }; });
     pages.push({ path: pagePath, purpose, walkthrough, ctas });
   }
-  return { overview, architecture, pages };
+  return { siteUrl, description, why, overview, architecture, pages };
 }
 
 // ---------------------------------------------------------------- report
@@ -295,7 +305,7 @@ async function buildPdf(projectName, analysis, crawl, boot, outDir, pdfName) {
     .footer { color: #9aa69e; font-size: 8.5px; margin-top: 26px; }
   </style></head><body>
     <h1>How ${esc(projectName)} works</h1>
-    <p class="sub">Deep analysis generated ${new Date().toISOString().slice(0, 10)} · app ${boot ? `booted via ${esc(boot.how)}; screenshots are real captures` : 'could not be booted; documentation is source-derived'} · model ${esc(MODEL)}</p>
+    <p class="sub">${analysis.siteUrl ? `Live at <a href="${esc(analysis.siteUrl)}">${esc(analysis.siteUrl)}</a> · ` : ''}Deep analysis generated ${new Date().toISOString().slice(0, 10)} · app ${boot ? `booted via ${esc(boot.how)}; screenshots are real captures` : 'could not be booted; documentation is source-derived'} · model ${esc(MODEL)}</p>
     <h2>Overview</h2>${paras(analysis.overview)}
     <h2>Architecture</h2>${paras(analysis.architecture)}
     ${analysis.pages.map((p) => `
@@ -304,7 +314,7 @@ async function buildPdf(projectName, analysis, crawl, boot, outDir, pdfName) {
         <p><em>${esc(p.purpose)}</em></p>
         ${shotFor(p) ? `<img class="shot" src="${shotFor(p)}" />` : ''}
         ${p.walkthrough ? `<h3>Walkthrough</h3>${paras(p.walkthrough)}` : ''}
-        ${p.ctas.length ? `<h3>Controls</h3><table><tr><th>Control</th><th>What it does</th></tr>${p.ctas.map((c) => `<tr><td class="label">${esc(c.label)}</td><td>${esc(c.behavior)}</td></tr>`).join('')}</table>` : ''}
+        ${p.ctas.length ? `<h3>Controls &amp; fields</h3><table><tr><th>Control / field</th><th>What it does</th></tr>${p.ctas.map((c) => `<tr><td class="label">${esc(c.label)}</td><td>${esc(c.behavior)}</td></tr>`).join('')}</table>` : ''}
       </div>`).join('')}
     <p class="footer">Generated by the workbench deep-analysis pipeline from the repository source and a live crawl.</p>
   </body></html>`;
@@ -341,11 +351,18 @@ try {
   log('collecting source evidence');
   const evidence = collectSource(repoDir);
 
+  const knownSiteUrl = typeof metadata.siteUrl === 'string' ? metadata.siteUrl : '';
+
   log('booting the app');
   let boot = null;
   let crawl = [];
   try {
     boot = await bootApp(repoDir);
+    if (!boot && knownSiteUrl) {
+      // the live deployment is the next-best truth for screenshots
+      log('local boot failed — crawling the live site instead:', knownSiteUrl);
+      boot = { url: knownSiteUrl, how: 'live site' };
+    }
     if (boot) {
       log('app is up at', boot.url, 'via', boot.how);
       crawl = await crawlApp(boot.url, outDir);
@@ -357,7 +374,7 @@ try {
   }
 
   log('running the deep analysis on', MODEL);
-  const raw = await analyze(evidence, crawl, projectName);
+  const raw = await analyze(evidence, crawl, projectName, knownSiteUrl);
   const analysis = parseAnalysis(raw);
   if (!analysis.overview || !analysis.pages.length) fail('the model reply could not be parsed into a report');
 
@@ -389,6 +406,11 @@ try {
   if (!meta.featuredArtifact || !survivors.includes(meta.featuredArtifact)) {
     meta.featuredArtifact = added.find((n) => n.endsWith('.png')) ?? meta.artifactOrder[0];
   }
+  // the deep analysis is the source of truth for the text fields too:
+  // written fresh from the full evidence, never anchored to the old wording
+  if (analysis.description) meta.description = analysis.description;
+  if (analysis.why) meta.why = analysis.why;
+  if (analysis.siteUrl) meta.siteUrl = analysis.siteUrl;
   meta.updatedDate = new Date().toISOString().slice(0, 10);
   const body = source.slice(match[0].length).replace(/^\r?\n/, '');
   writeFileSync(indexPath, `---\n${stringify(meta, { lineWidth: 0 }).trimEnd()}\n---\n${body ? `\n${body}` : ''}`);

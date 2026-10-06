@@ -287,7 +287,7 @@ const { id } = Astro.props;
         if (title && typeof metadata.name === 'string') title.textContent = metadata.name;
         if (description && typeof metadata.description === 'string') description.textContent = metadata.description;
         whyEl.textContent = typeof metadata.why === 'string' ? metadata.why : '';
-        for (const field of ['repositoryUrl', 'pullRequestUrl']) {
+        for (const field of ['repositoryUrl', 'pullRequestUrl', 'siteUrl']) {
           const value = typeof metadata[field] === 'string' ? (metadata[field] as string) : '';
           if (value) applyFieldDisplay(field, value);
         }
