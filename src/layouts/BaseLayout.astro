@@ -79,6 +79,7 @@ const CARD = {
     <title>{pageTitle}</title>
   </head>
   <body>
+    <canvas class="bg-rain" data-bg-rain aria-hidden="true"></canvas>
     <header class="site-header">
       <div class="site-header__inner">
         <button type="button" class="brand brand--button" data-card-open aria-label={`Contact card for ${CARD.name}`} title="Contact card">
@@ -230,6 +231,10 @@ const CARD = {
       import QRCode from 'qrcode';
       import { TOKEN_EVENT, clearToken, getStoredToken, getVaultText, storeToken, validateToken } from '../lib/github-client';
       import { clearAnthropicKey, clearOpenAiProxy, detectProvider, getStoredAnthropicKey, getStoredOpenAiProxy, storeAnthropicKey, storeOpenAiProxy } from '../lib/ai/keys';
+      import { startBackgroundRain } from '../lib/bg-rain';
+
+      const rainCanvas = document.querySelector<HTMLCanvasElement>('[data-bg-rain]');
+      if (rainCanvas) startBackgroundRain(rainCanvas);
 
       // --- header connections icon + dialog (hosted builds only) ---
       // One input for every credential; the paste's prefix says what it is.

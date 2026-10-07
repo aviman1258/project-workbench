@@ -41,12 +41,23 @@
 html {
   scroll-behavior: smooth;
   scroll-padding-top: 7rem;
+  /* the page color lives here so the fixed rain canvas (z-index -1)
+     can sit between it and the content */
+  background: var(--paper);
+}
+
+/* site-wide falling-rain backdrop, drawn by src/lib/bg-rain.ts */
+.bg-rain {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
 }
 
 body {
   margin: 0;
   min-width: 320px;
-  background: var(--paper);
+  background: transparent;
   color: var(--ink);
   font-family: var(--sans);
   font-size: 16px;
