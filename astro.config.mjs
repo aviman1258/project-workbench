@@ -4,6 +4,10 @@ import { localEditorPlugin } from './src/lib/local-editor';
 export default defineConfig({
   output: 'static',
   trailingSlash: 'never',
+  // 'file' emits projects/tour-guide.html instead of projects/tour-guide/index.html,
+  // so GitHub Pages serves the slash-less URLs the sitemap and canonicals use
+  // directly (200) instead of 301-redirecting them to a trailing-slash variant.
+  build: { format: 'file' },
   site: 'https://www.avisheksportfolio.com',
   // The custom domain serves at the root, so the deploy workflow no longer sets
   // DEPLOY_BASE; the hook stays for building path-prefixed previews by hand.
