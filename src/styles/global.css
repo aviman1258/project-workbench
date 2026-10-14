@@ -456,6 +456,29 @@ a {
   white-space: nowrap;
 }
 
+/* /our-adventures doorway page (the library itself lives on its own host) */
+.adventures-door {
+  max-width: 560px;
+}
+
+.adventures-door h1 {
+  margin: 0;
+  font: 500 clamp(2.6rem, 6vw, 4rem)/1.05 var(--serif);
+  letter-spacing: -0.04em;
+}
+
+.adventures-door p:not(.eyebrow) {
+  color: var(--ink-soft);
+  margin: 18px 0 26px;
+}
+
+.adventures-door__enter {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 22px;
+  text-decoration: none;
+}
+
 .work-intro {
   margin: 14px 0 0;
   color: var(--ink-soft);

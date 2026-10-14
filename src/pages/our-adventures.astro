@@ -1,0 +1,18 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+// A public doorway only: the private reel library itself lives on a separate
+// hostname behind Cloudflare Access. Nothing personal renders here.
+const ADVENTURES_URL = 'https://adventures.avisheksportfolio.com';
+---
+
+<BaseLayout title="Our Adventures" description="A private family vacation reel library." noindex>
+  <div class="page-shell adventures-door">
+    <p class="eyebrow">Family only</p>
+    <h1>Our Adventures</h1>
+    <p>
+      A private, cinematic reel library of our vacations — for us and a few
+      invited family members. You'll be asked to sign in with your email.
+    </p>
+    <a class="primary-button adventures-door__enter" href={ADVENTURES_URL}>Open the journal →</a>
+  </div>
+</BaseLayout>

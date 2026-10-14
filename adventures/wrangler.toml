@@ -1,0 +1,27 @@
+name = "our-adventures"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+# The gallery/player UI, served by the same Worker so everything is
+# same-origin behind Cloudflare Access.
+[assets]
+directory = "app"
+binding = "ASSETS"
+
+# Private bucket holding videos, covers, and library.json. Nothing in it is
+# publicly reachable; only this Worker (behind Access) reads or writes it.
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "our-adventures"
+
+[[routes]]
+pattern = "adventures.avisheksportfolio.com"
+custom_domain = true
+
+[vars]
+# Cloudflare Zero Trust team domain, e.g. "avishek.cloudflareaccess.com"
+ACCESS_TEAM_DOMAIN = "SET-ME.cloudflareaccess.com"
+# The Access application's Audience (AUD) tag, from the Zero Trust dashboard
+ACCESS_AUD = "SET-ME"
+# Comma-separated emails allowed to create vacations and upload reels
+ADMIN_EMAILS = "achandra1258@gmail.com"

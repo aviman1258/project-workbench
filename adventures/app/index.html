@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#121008" />
+    <title>Our Adventures</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <div>
+        <p class="masthead__eyebrow">Avishek &amp; family</p>
+        <h1>Our Adventures</h1>
+      </div>
+      <div class="masthead__controls">
+        <button type="button" class="sort-toggle" data-sort-toggle aria-label="Toggle sort order">Newest first</button>
+        <button type="button" class="admin-open" data-admin-open hidden>+ Add</button>
+      </div>
+    </header>
+
+    <main class="timeline" data-timeline aria-live="polite">
+      <p class="timeline__loading" data-loading>Opening the journal…</p>
+    </main>
+
+    <!-- Full-screen vertical reel viewer -->
+    <div class="viewer" data-viewer hidden>
+      <button type="button" class="viewer__close" data-viewer-close aria-label="Close">✕</button>
+      <div class="viewer__feed" data-viewer-feed></div>
+    </div>
+
+    <!-- Admin: create vacation / publish reel -->
+    <dialog class="admin" data-admin-dialog>
+      <h2>Add to the journal</h2>
+      <div class="admin__tabs">
+        <button type="button" data-admin-tab="vacation" data-active="true">Vacation</button>
+        <button type="button" data-admin-tab="reel" data-active="false">Reel</button>
+      </div>
+
+      <form class="admin__form" data-vacation-form>
+        <label>Title <input name="title" required maxlength="120" placeholder="Amalfi Coast" /></label>
+        <label>Destination <input name="destination" maxlength="120" placeholder="Positano, Italy" /></label>
+        <div class="admin__row">
+          <label>First day <input name="startDate" type="date" required /></label>
+          <label>Last day <input name="endDate" type="date" required /></label>
+        </div>
+        <label>Description <textarea name="description" rows="3" maxlength="600" placeholder="The trip where…"></textarea></label>
+        <label class="admin__file">Cover photo <input name="cover" type="file" accept="image/*" /></label>
+        <p class="admin__status" data-vacation-status></p>
+        <div class="admin__actions">
+          <button type="button" data-admin-close>Close</button>
+          <button type="submit" class="admin__primary">Save vacation</button>
+        </div>
+      </form>
+
+      <form class="admin__form" data-reel-form hidden>
+        <label>Vacation <select name="vacationId" required data-reel-vacations></select></label>
+        <label>Reel title <input name="title" maxlength="120" placeholder="Day one — the drive in" /></label>
+        <label class="admin__file">Video (9:16 MP4) <input name="video" type="file" accept="video/*" required /></label>
+        <label class="admin__file">Cover frame (optional) <input name="thumb" type="file" accept="image/*" /></label>
+        <fieldset>
+          <legend>Music credit</legend>
+          <div class="admin__row">
+            <label>Track <input name="musicTitle" maxlength="120" /></label>
+            <label>Artist <input name="musicArtist" maxlength="120" /></label>
+          </div>
+          <div class="admin__row">
+            <label>Source <input name="musicSource" maxlength="160" placeholder="Where it came from" /></label>
+            <label>License <input name="musicLicense" maxlength="160" placeholder="Personal use / licensed / royalty-free" /></label>
+          </div>
+        </fieldset>
+        <p class="admin__status" data-reel-status></p>
+        <div class="admin__actions">
+          <button type="button" data-admin-close>Close</button>
+          <button type="submit" class="admin__primary">Publish reel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
